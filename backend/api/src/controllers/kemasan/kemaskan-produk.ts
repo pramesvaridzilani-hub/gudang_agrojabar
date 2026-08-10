@@ -35,37 +35,75 @@ export const kemaskanProduk = async (req: AuthenticatedRequest, res: Response) =
 
     const totalKgDibutuhkan = ukuranKg * jumlahKemasan;
 
-    if (produk.stok < totalKgDibutuhkan) {
-      return res.status(400).json({
-        statusCode: 400,
-        message: `Stok sayur segar (bulk) tidak mencukupi. Tersedia ${produk.stok} kg, butuh ${totalKgDibutuhkan} kg.`
-      });
-    }
 
     // Execute in transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Kurangi stok bulk
+      const p = await tx.produkGudang.findUnique({
+        where: { id: produkGudangId }
+      });
+      if (!p) throw new Error('Produk gudang tidak ditemukan');
+      if (p.stok < totalKgDibutuhkan) throw new Error(`Stok sayur segar tidak cukup. Tersedia: ${p.stok}kg, dibutuhkan: ${totalKgDibutuhkan}kg`);
+
+      // Deduct bulk stock and round it to 2 decimals
+      const newStok = Math.round((p.stok - totalKgDibutuhkan) * 100) / 100;
       await tx.produkGudang.update({
         where: { id: produkGudangId },
-        data: { stok: { decrement: totalKgDibutuhkan } }
+        data: { stok: newStok }
       });
 
-      // 2. Tambah stok kemasan yang spesifik ukuranKg
-      const existingKemasan = await tx.konfigurasiKemasan.findFirst({
+      // Find existing configuration for this specific pack size
+      const existing = await tx.konfigurasiKemasan.findFirst({
         where: { produkGudangId, ukuranKg }
       });
 
       let updatedKemasan;
-      if (existingKemasan) {
+      if (existing) {
         updatedKemasan = await tx.konfigurasiKemasan.update({
-          where: { id: existingKemasan.id },
-          data: { stokKemasan: { increment: jumlahKemasan } }
+          where: { id: existing.id },
+          data: { stokKemasan: existing.stokKemasan + jumlahKemasan }
         });
       } else {
         updatedKemasan = await tx.konfigurasiKemasan.create({
-          data: { produkGudangId, ukuranKg, stokKemasan: jumlahKemasan, isActive: true }
+          data: {
+            produkGudangId,
+            ukuranKg,
+            stokKemasan: jumlahKemasan,
+            isActive: true
+          }
         });
       }
+
+      // Record history for FROZEN (Tambah)
+      await tx.riwayatPerubahanStok.create({
+        data: {
+          produkGudangId,
+          gudangId: p.gudangId,
+          penggunaId: req.user!.id,
+          jenisStok: 'FROZEN',
+          operasi: 'TAMBAH',
+          jumlah: jumlahKemasan,
+          ukuranKemasanKg: ukuranKg,
+          stokSebelumnya: existing ? existing.stokKemasan : 0,
+          stokSetelahnya: existing ? existing.stokKemasan + jumlahKemasan : jumlahKemasan,
+          keterangan: `Pengemasan dari sayur segar (${totalKgDibutuhkan} kg)`,
+        }
+      });
+
+      // Record history for SEGAR (Kurang)
+      await tx.riwayatPerubahanStok.create({
+        data: {
+          produkGudangId,
+          gudangId: p.gudangId,
+          penggunaId: req.user!.id,
+          jenisStok: 'SEGAR',
+          operasi: 'KURANG',
+          jumlah: totalKgDibutuhkan,
+          stokSebelumnya: p.stok,
+          stokSetelahnya: p.stok - totalKgDibutuhkan,
+          keterangan: `Pengemasan produk ke ${jumlahKemasan} pack @${ukuranKg}kg`,
+        }
+      });
+
       return { updatedKemasan };
     });
 

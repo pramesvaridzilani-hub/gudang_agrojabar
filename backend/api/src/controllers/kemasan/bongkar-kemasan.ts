@@ -25,24 +25,73 @@ export const bongkarKemasan = async (req: AuthenticatedRequest, res: Response) =
 
     // Execute in transaction
     const result = await prisma.$transaction(async (tx) => {
-      const existingKemasan = await tx.konfigurasiKemasan.findFirst({
+      const p = await tx.produkGudang.findUnique({
+        where: { id: produkGudangId }
+      });
+      if (!p) throw new Error('Produk gudang tidak ditemukan');
+
+      // Find existing configuration for this specific pack size
+      const existing = await tx.konfigurasiKemasan.findFirst({
         where: { produkGudangId, ukuranKg }
       });
 
-      if (!existingKemasan || existingKemasan.stokKemasan < jumlahKemasan) {
-         throw new Error(`Stok kemasan ukuran ${ukuranKg}kg tidak mencukupi untuk dibongkar.`);
+      if (!existing) {
+        throw new Error(`Stok kemasan ukuran ${ukuranKg}kg tidak ditemukan`);
       }
 
-      // 1. Kurangi stok kemasan spesifik
-      const updatedKemasan = await tx.konfigurasiKemasan.update({
-        where: { id: existingKemasan.id },
-        data: { stokKemasan: { decrement: jumlahKemasan } }
-      });
+      if (existing.stokKemasan < jumlahKemasan) {
+        throw new Error(`Stok kemasan ${ukuranKg}kg tidak mencukupi. Tersedia ${existing.stokKemasan} pack, ingin dihapus ${jumlahKemasan} pack`);
+      }
 
-      // 2. Tambah stok bulk
+      // Add bulk stock back and round it to 2 decimals
+      const newStok = Math.round((p.stok + totalKgDikembalikan) * 100) / 100;
       await tx.produkGudang.update({
         where: { id: produkGudangId },
-        data: { stok: { increment: totalKgDikembalikan } }
+        data: { stok: newStok }
+      });
+
+      let updatedKemasan;
+      if (existing.stokKemasan === jumlahKemasan) {
+        // Delete if becoming 0
+        await tx.konfigurasiKemasan.delete({ where: { id: existing.id } });
+        updatedKemasan = null;
+      } else {
+        // Decrement
+        updatedKemasan = await tx.konfigurasiKemasan.update({
+          where: { id: existing.id },
+          data: { stokKemasan: existing.stokKemasan - jumlahKemasan }
+        });
+      }
+
+      // Record history for FROZEN (Kurang)
+      await tx.riwayatPerubahanStok.create({
+        data: {
+          produkGudangId,
+          gudangId: p.gudangId,
+          penggunaId: req.user!.id,
+          jenisStok: 'FROZEN',
+          operasi: 'KURANG',
+          jumlah: jumlahKemasan,
+          ukuranKemasanKg: ukuranKg,
+          stokSebelumnya: existing.stokKemasan,
+          stokSetelahnya: existing.stokKemasan - jumlahKemasan,
+          keterangan: `Pembongkaran kemasan menjadi sayur segar (${totalKgDikembalikan} kg)`,
+        }
+      });
+
+      // Record history for SEGAR (Tambah)
+      await tx.riwayatPerubahanStok.create({
+        data: {
+          produkGudangId,
+          gudangId: p.gudangId,
+          penggunaId: req.user!.id,
+          jenisStok: 'SEGAR',
+          operasi: 'TAMBAH',
+          jumlah: totalKgDikembalikan,
+          stokSebelumnya: p.stok,
+          stokSetelahnya: p.stok + totalKgDikembalikan,
+          keterangan: `Pembongkaran ${jumlahKemasan} pack @${ukuranKg}kg kembali ke bulk`,
+        }
       });
 
       return { updatedKemasan };

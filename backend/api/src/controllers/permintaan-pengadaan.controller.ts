@@ -6,3 +6,4 @@ export * from './permintaan-pengadaan/kirim-permintaan-ke-petani';
 export * from './permintaan-pengadaan/update-komitmen-from-petani';
 export * from './permintaan-pengadaan/update-status-tracking';
 export * from './permintaan-pengadaan/submit-qc';
+export * from './permintaan-pengadaan/expire-permintaan-pengadaan';

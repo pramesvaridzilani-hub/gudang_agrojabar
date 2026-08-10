@@ -8,6 +8,7 @@ import {
   deleteProdukGudang,
   getProdukKatalog,
   getProdukForAffiliate,
+  getRiwayatStok,
 } from '../controllers/produk.controller';
 
 const router = Router();
@@ -55,6 +56,14 @@ router.delete(
   deleteProdukGudang as any
 );
 
+// GET /api/produk/staf/:produkGudangId/riwayat
+router.get(
+  '/staf/:produkGudangId/riwayat',
+  authMiddleware as any,
+  requireRole(['STAF_GUDANG', 'ADMIN_GUDANG', 'SUPER_ADMIN']),
+  getRiwayatStok as any
+);
+
 // ─── Admin Routes (Full CRUD) ────────────────────────────────────────────────
 // GET /api/produk/admin
 router.get(
@@ -86,6 +95,14 @@ router.delete(
   authMiddleware as any,
   requireRole(['ADMIN_GUDANG', 'SUPER_ADMIN']),
   deleteProdukGudang as any
+);
+
+// GET /api/produk/admin/:produkGudangId/riwayat
+router.get(
+  '/admin/:produkGudangId/riwayat',
+  authMiddleware as any,
+  requireRole(['ADMIN_GUDANG', 'SUPER_ADMIN']),
+  getRiwayatStok as any
 );
 
 export default router;

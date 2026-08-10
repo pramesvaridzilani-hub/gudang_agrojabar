@@ -11,6 +11,9 @@ import {
   deleteTenagaKerja,
   getKapasitasTanggal,
   eksekusiJadwal,
+  getAntreanProduksi,
+  getProductionDemandPool,
+  cancelDemand,
 } from '../controllers/jadwal-produksi.controller';
 
 const router = Router();
@@ -23,6 +26,9 @@ router.get('/kapasitas', authMiddleware, getKapasitasTanggal);
 
 // CRUD jadwal
 router.get('/', authMiddleware, getJadwalList);
+router.get('/antrean', authMiddleware, getAntreanProduksi);
+router.get('/demand-pool', authMiddleware, getProductionDemandPool as any);
+router.post('/demand-pool/cancel', authMiddleware, cancelDemand as any);
 router.post('/', authMiddleware, createJadwal);
 router.get('/:id', authMiddleware, getJadwalById);
 router.patch('/:id/status', authMiddleware, updateJadwalStatus);

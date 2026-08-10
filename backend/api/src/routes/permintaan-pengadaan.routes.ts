@@ -10,6 +10,7 @@ import {
   updateKomitmenFromPetani,
   updateStatusTracking,
   submitQc,
+  expirePermintaanPengadaan,
 } from '../controllers/permintaan-pengadaan.controller';
 
 const router = Router();
@@ -72,6 +73,14 @@ router.post(
   authMiddleware as any,
   staf,
   submitQc as any
+);
+
+// 8. Expire Produk (staf & Kepala Gudang)
+router.post(
+  '/:id/expire',
+  authMiddleware as any,
+  staf,
+  expirePermintaanPengadaan as any
 );
 
 import { petaniApiKeyMiddleware } from '../middleware/petani-api-key.middleware';

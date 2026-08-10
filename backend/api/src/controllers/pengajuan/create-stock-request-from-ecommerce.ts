@@ -12,6 +12,9 @@ export const createStockRequestFromEcommerce = async (req: Request, res: Respons
       gudangId,
       catatan,
       modePengemasan,
+      tipePengiriman,
+      tanggalPermintaanKirim,
+      estimasiSampai,
       items,
     } = req.body;
 
@@ -60,6 +63,9 @@ export const createStockRequestFromEcommerce = async (req: Request, res: Respons
         catatan,
         status: 'DIAJUKAN',
         modePengemasan: modePengemasan || 'DEFAULT',
+        tipePengiriman: tipePengiriman || 'DEFAULT',
+        tanggalPermintaanKirim: tanggalPermintaanKirim ? new Date(tanggalPermintaanKirim) : null,
+        estimasiSampai: estimasiSampai ? new Date(estimasiSampai) : null,
         items: {
           create: items.map((item: any) => ({
             produkId: item.produkGudangId,

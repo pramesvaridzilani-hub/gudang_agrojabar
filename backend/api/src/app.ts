@@ -18,8 +18,6 @@ import hargaPetaniRoutes from './routes/harga-petani.routes';
 import jadwalProduksiRoutes from './routes/jadwal-produksi.routes';
 import trendTokoRoutes from './routes/trend-toko.routes';
 import masterKomoditasRoutes from './routes/master-komoditas.routes';
-import afiliasiRoutes from './routes/afiliasi.routes';
-import tokoAfiliasiRoutes from './routes/toko-afiliasi.routes';
 
 const app = express();
 
@@ -32,9 +30,9 @@ app.use(
   })
 );
 
-// Standard parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Standard parsers with increased size limit for base64 image uploads (QC evidence, etc.)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve API routes
 app.use('/api/auth', authRoutes);
@@ -55,8 +53,6 @@ app.use('/api/harga-petani', hargaPetaniRoutes);
 app.use('/api/jadwal-produksi', jadwalProduksiRoutes);
 app.use('/api/gudang', trendTokoRoutes);
 app.use('/api/master-komoditas', masterKomoditasRoutes);
-app.use('/api/afiliasi', afiliasiRoutes);
-app.use('/api/toko-afiliasi', tokoAfiliasiRoutes);
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });

@@ -23,11 +23,12 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
     const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
-    const response = await axios.get(`${ecomUrl}/analytics/demand-signal/gudang?gudangId=${gudangId}`, {
+    const response = await axios.get(`${ecomUrl}/api/analytics/demand-signal/gudang?gudangId=${gudangId}`, {
       headers: { 'x-api-key': ecomKey }
     });
 
-    const ecomData = response.data.data || [];
+    const payload = response.data?.data || {};
+    const ecomData = payload.data || [];
 
     // Ambil Produk Gudang saat ini untuk mendapatkan stok riil
     const produkGudangList = await prisma.produkGudang.findMany({
@@ -66,6 +67,8 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
       gudangId: gudang.id,
       gudangNama: gudang.nama,
       lastUpdated: new Date().toISOString(),
+      periodLabel: payload.period?.label || 'Bulan Ini',
+      prevPeriodLabel: payload.prevPeriod?.label || 'Bulan Lalu',
       data: result
     });
   } catch (error: any) {

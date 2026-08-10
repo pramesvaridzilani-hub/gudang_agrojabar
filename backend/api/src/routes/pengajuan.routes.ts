@@ -4,6 +4,8 @@ import {
   getStockRequestById,
   updateStockRequestStatus,
   createStockRequestFromEcommerce,
+  allocateStockRequest,
+  updateStockRequestStatusFromEcommerce
 } from '../controllers/pengajuan.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { roleGuard } from '../middleware/role.middleware';
@@ -35,11 +37,26 @@ router.patch(
   updateStockRequestStatus as any
 );
 
+// Allocate stock for a stock request
+router.post(
+  '/:id/allocate',
+  authMiddleware as any,
+  roleGuard(['STAF_GUDANG', 'ADMIN_GUDANG', 'SUPER_ADMIN']) as any,
+  allocateStockRequest as any
+);
+
 // Webhook: Receive pengajuan stok from ECOMMERCE backend
 router.post(
   '/webhook/from-ecommerce',
   apiKeyMiddleware as any,
   createStockRequestFromEcommerce as any
+);
+
+// Webhook: Receive pengajuan stok status update from ECOMMERCE backend
+router.patch(
+  '/webhook/from-ecommerce/:id/status',
+  apiKeyMiddleware as any,
+  updateStockRequestStatusFromEcommerce as any
 );
 
 export default router;

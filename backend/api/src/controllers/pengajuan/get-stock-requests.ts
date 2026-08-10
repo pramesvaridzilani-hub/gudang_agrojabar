@@ -59,24 +59,7 @@ export const getStockRequests = async (req: AuthenticatedRequest, res: Response)
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fetch all related ProdukGudang with its packaging config to enrich payload with real-time stock
-    const produkIds = new Set<string>();
-    requests.forEach(r => r.items.forEach(i => produkIds.add(i.produkId)));
-
-    const produkList = await prisma.produkGudang.findMany({
-      where: { id: { in: Array.from(produkIds) } },
-      include: { kemasan: { orderBy: { ukuranKg: 'asc' } }, masterKomoditas: true }
-    });
-
-    const produkMap = new Map(produkList.map(p => [p.id, p]));
-
-    const formattedRequests = requests.map(r => {
-      const itemsWithProductConfig = r.items.map(item => ({
-        ...item,
-        produkGudang: produkMap.get(item.produkId) || null
-      }));
-      return formatStockRequest(r as any, itemsWithProductConfig);
-    });
+    const formattedRequests = requests.map(r => formatStockRequest(r));
 
     return res.status(200).json({
       statusCode: 200,

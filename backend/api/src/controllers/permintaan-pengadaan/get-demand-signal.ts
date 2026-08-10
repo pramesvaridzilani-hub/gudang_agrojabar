@@ -7,7 +7,7 @@ const ECOMMERCE_API_KEY = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-
 
 export const getDemandSignal = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { gudangId, month, year, limit } = req.query;
+    const { gudangId, month, year, limit, period } = req.query;
 
     if (!gudangId) {
       return res.status(400).json({ error: 'gudangId wajib diisi' });
@@ -18,6 +18,7 @@ export const getDemandSignal = async (req: AuthenticatedRequest, res: Response) 
     if (month) params.set('month', month as string);
     if (year) params.set('year', year as string);
     if (limit) params.set('limit', limit as string);
+    if (period) params.set('period', period as string);
 
     const response = await axios.get(
       `${ECOMMERCE_URL}/api/analytics/demand-signal/gudang?${params.toString()}`,

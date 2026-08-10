@@ -57,7 +57,10 @@ export const updateProdukGudang = async (req: AuthenticatedRequest, res: Respons
     const updateData: any = {};
     if (deskripsi !== undefined) updateData.deskripsi = deskripsi;
     if (hargaGudang !== undefined) updateData.hargaGudang = Number(hargaGudang);
-    if (stok !== undefined) updateData.stok = Number(stok);
+    if (stok !== undefined) {
+      const rounded = Math.round(Number(stok) * 100) / 100;
+      updateData.stok = rounded;
+    }
     if (req.body.minimalPembelianKg !== undefined) updateData.minimalPembelianKg = Number(req.body.minimalPembelianKg);
     if (gambarUrl !== undefined) updateData.gambarUrl = gambarUrl;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
@@ -96,19 +99,42 @@ export const updateProdukGudang = async (req: AuthenticatedRequest, res: Respons
       if (satuan !== undefined) updateData.satuan = satuan;
     }
 
-    const updatedProduct = await prisma.produkGudang.update({
-      where: { id },
-      data: updateData,
-      include: {
-        masterKomoditas: {
-          select: {
-            id: true,
-            nama: true,
-            kategori: true,
-            satuan: true,
+    const updatedProduct = await prisma.$transaction(async (tx) => {
+      const p = await tx.produkGudang.update({
+        where: { id },
+        data: updateData,
+        include: {
+          masterKomoditas: {
+            select: {
+              id: true,
+              nama: true,
+              kategori: true,
+              satuan: true,
+            },
           },
         },
-      },
+      });
+
+      // Record history if stock changed
+      if (stok !== undefined && existingProduct.stok !== Number(stok)) {
+        const operasi = Number(stok) > existingProduct.stok ? 'TAMBAH' : 'KURANG';
+        const jumlah = Math.abs(Number(stok) - existingProduct.stok);
+        await tx.riwayatPerubahanStok.create({
+          data: {
+            produkGudangId: id,
+            gudangId: existingProduct.gudangId,
+            penggunaId: req.user!.id,
+            jenisStok: 'SEGAR',
+            operasi,
+            jumlah,
+            stokSebelumnya: existingProduct.stok,
+            stokSetelahnya: Number(stok),
+            keterangan: 'Edit manual stok segar',
+          }
+        });
+      }
+
+      return p;
     });
 
     return res.status(200).json({

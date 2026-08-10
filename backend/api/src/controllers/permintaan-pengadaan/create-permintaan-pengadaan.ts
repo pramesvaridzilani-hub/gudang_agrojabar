@@ -22,6 +22,7 @@ export const createPermintaanPengadaan = async (req: AuthenticatedRequest, res: 
       nomorOrder,
       tipePesanan,
       sumberOrderId,
+      rencanaProduksi,
     } = req.body;
 
     if (!gudangId || !komoditasNama || !targetKg) {
@@ -73,6 +74,7 @@ export const createPermintaanPengadaan = async (req: AuthenticatedRequest, res: 
         nomorOrder: nomorOrder || null,
         tipePesanan: tipePesanan || 'MANUAL',
         sumberOrderId: sumberOrderId || null,
+        rencanaProduksi: rencanaProduksi || null,
         status: 'DRAFT',
         periode,
       },
