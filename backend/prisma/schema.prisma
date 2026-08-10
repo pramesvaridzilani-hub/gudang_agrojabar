@@ -1,0 +1,629 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Pengguna {
+  id                     String                 @id @default(uuid())
+  email                  String                 @unique
+  kataSandi              String
+  nama                   String?
+  noTelepon              String?
+  peran                  Peran                  @default(STAF_GUDANG)
+  emailTerverifikasiPada DateTime?
+  resetPasswordToken     String?
+  resetPasswordExpiry    DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  RiwayatPerubahanStok   RiwayatPerubahanStok[]
+  penjualanKeluar        PenjualanKeluar[]      @relation("PenjualanKeluarPencatat")
+  warehouseReceipts      PenerimaanGudang[]     @relation("WarehouseReceipts")
+  managedWarehouses      Gudang[]               @relation("WarehouseManager")
+
+  @@map("pengguna")
+}
+
+model Gudang {
+  id                   String                   @id @default(uuid())
+  kode                 String                   @unique
+  nama                 String
+  tipe                 TipeGudang               @default(REGIONAL)
+  alamat               String
+  kabupaten            String
+  provinsi             String                   @default("Jawa Barat")
+  lat                  Float
+  lng                  Float
+  kapasitasKg          Float                    @default(10000)
+  kapasitasTerpakai    Float                    @default(0)
+  penanggungJawabId    String?
+  telepon              String?
+  email                String?
+  jamOperasional       String?
+  fotoUrl              String?
+  status               StatusGudang             @default(ACTIVE)
+  catatan              String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  RiwayatPerubahanStok RiwayatPerubahanStok[]
+  pengajuanStok        PengajuanStokToko[]
+  hppProduk            HppProduk[]
+  jadwalProduksi       JadwalProduksi[]
+  pemrosesan           PemrosesanGudang[]
+  penjualanKeluar      PenjualanKeluar[]
+  pekerjaanBooking     PekerjaanBookingGudang[]
+  permintaanPengadaan  PermintaanPengadaan[]
+  products             ProdukGudang[]
+  receipts             PenerimaanGudang[]
+  zones                ZonaGudang[]
+  penanggungJawab      Pengguna?                @relation("WarehouseManager", fields: [penanggungJawabId], references: [id])
+
+  @@map("warehouses")
+}
+
+model ZonaGudang {
+  id        String   @id @default(uuid())
+  gudangId  String
+  namaZona  String
+  kabupaten String
+  kecamatan String?
+  radiusKm  Float    @default(25)
+  centerLat Float
+  centerLng Float
+  prioritas Int      @default(1)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  gudang    Gudang   @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+
+  @@map("warehouse_zones")
+}
+
+model PenerimaanGudang {
+  id                    String              @id @default(uuid())
+  nomorPenerimaan       String              @unique
+  penjemputanId         String              @unique
+  penerimaId            String
+  gudangId              String?
+  beratDiterimaKg       Float
+  kondisi               String              @default("BAIK")
+  totalNilai            Float               @default(0)
+  status                StatusPenerimaan    @default(RECEIVED)
+  catatan               String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  petaniNama            String?
+  komoditasNama         String?
+  kodeKomoditasGlobal   String?
+  masterKomoditasId     String?
+  sinkronisasiKePetani  String?
+  permintaanPengadaanId String?
+  komitmenPetaniId      String?
+  petaniId              String?
+  sanggupKg             Float?
+  estimasiTanggalPanen  String?
+  intakeStatus          String              @default("menunggu_penerimaan")
+  terimaAt              DateTime?
+  ditimbangAt           DateTime?
+  beratAsliKg           Float?
+  buktiPembayaranUrl    String?
+  uploadBuktiAt         DateTime?
+  gradings              GradingPenerimaan[]
+  gudang                Gudang?             @relation(fields: [gudangId], references: [id])
+  penerima              Pengguna            @relation("WarehouseReceipts", fields: [penerimaId], references: [id])
+
+  @@map("warehouse_receipts")
+}
+
+model PenjualanKeluar {
+  id                  String                @id @default(uuid())
+  nomorPenjualan      String                @unique
+  gudangId            String?
+  dicatatOlehId       String
+  komoditasNama       String
+  kodeKomoditasGlobal String?
+  masterKomoditasId   String?
+  penerimaanId        String?
+  petaniNama          String?
+  beratKg             Float
+  hargaPerKg          Float                 @default(0)
+  totalNilai          Float                 @default(0)
+  tujuanPenjualan     String
+  jenisPembeli        JenisPembeliKeluar    @default(LAINNYA)
+  metodePembayaran    String?
+  tanggalPenjualan    DateTime              @default(now())
+  catatan             String?
+  status              StatusPenjualanKeluar @default(TERCATAT)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  dicatatOleh         Pengguna              @relation("PenjualanKeluarPencatat", fields: [dicatatOlehId], references: [id])
+  gudang              Gudang?               @relation(fields: [gudangId], references: [id])
+  masterKomoditas     MasterKomoditas?      @relation(fields: [masterKomoditasId], references: [id])
+
+  @@index([gudangId])
+  @@index([tanggalPenjualan])
+  @@map("warehouse_external_sales")
+}
+
+model GradingPenerimaan {
+  id                String           @id @default(uuid())
+  penerimaanId      String
+  namaGrade         String
+  beratKg           Float
+  hargaPerKg        Float            @default(0)
+  totalNilai        Float            @default(0)
+  produkTerhubungId String?
+  isReject          Boolean          @default(false)
+  alasanReject      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  penerimaan        PenerimaanGudang @relation(fields: [penerimaanId], references: [id], onDelete: Cascade)
+
+  @@map("receipt_gradings")
+}
+
+model PekerjaanBookingGudang {
+  id                String                 @id @default(uuid())
+  bookingId         String                 @unique
+  gudangId          String
+  spesifikasi       String?
+  gradeTarget       String?
+  jumlahInputKg     Float                  @default(0)
+  jumlahOutputKgA   Float                  @default(0)
+  jumlahOutputKgB   Float                  @default(0)
+  jumlahOutputKgC   Float                  @default(0)
+  jumlahRejectKg    Float                  @default(0)
+  targetSelesaiPada DateTime?
+  masukPada         DateTime?
+  selesaiPada       DateTime?
+  status            StatusPekerjaanBooking @default(ANTRI)
+  catatanStaff      String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  gudang            Gudang                 @relation(fields: [gudangId], references: [id])
+
+  @@map("warehouse_job_booking")
+}
+
+model PengajuanStokToko {
+  id                     String              @id @default(uuid())
+  ecommerceRequestId     String?             @unique
+  tokoId                 String
+  tokoNama               String?
+  gudangId               String
+  status                 StatusPengajuanStok @default(DIAJUKAN)
+  modePengemasan         ModePengemasan      @default(DEFAULT)
+  catatan                String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  alamatKirim            String?
+  estimasiSampai         DateTime?
+  isPesananGrosir        Boolean             @default(false)
+  konsumenId             String?
+  lat                    Float?
+  lng                    Float?
+  tanggalPermintaanKirim DateTime?
+  tipePengiriman         TipePengiriman      @default(DEFAULT)
+  items                  ItemPengajuanStok[]
+  gudang                 Gudang              @relation(fields: [gudangId], references: [id])
+
+  @@map("ecom_store_stock_requests")
+}
+
+model ItemPengajuanStok {
+  id                String                     @id @default(uuid())
+  pengajuanId       String
+  produkId          String
+  produkNama        String?
+  jumlahPermintaan  Float
+  jumlahDisetujui   Float?
+  hargaPerUnit      Float?
+  totalHarga        Float?
+  ukuranKemasanKg   Float?
+  jumlahKemasan     Int?
+  totalKg           Float?
+  jumlahDireservasi Float                      @default(0)
+  kemasanDetail     ItemPengajuanStokKemasan[]
+  pengajuan         PengajuanStokToko          @relation(fields: [pengajuanId], references: [id], onDelete: Cascade)
+
+  @@map("ecom_store_stock_request_items")
+}
+
+model ItemPengajuanStokKemasan {
+  id                  String            @id @default(uuid())
+  itemPengajuanStokId String
+  ukuranKg            Float
+  jumlahKemasan       Int
+  jumlahDireservasi   Int               @default(0)
+  itemPengajuanStok   ItemPengajuanStok @relation(fields: [itemPengajuanStokId], references: [id], onDelete: Cascade)
+
+  @@unique([itemPengajuanStokId, ukuranKg])
+  @@map("ecom_store_stock_request_item_packages")
+}
+
+model ProdukGudang {
+  id                   String                 @id @default(uuid())
+  gudangId             String
+  masterKomoditasId    String?
+  nama                 String
+  varianProduk         String?
+  deskripsi            String?
+  satuan               String                 @default("kg")
+  gambarUrl            String?
+  hargaGudang          Float
+  stok                 Float                  @default(0)
+  minimalPembelianKg   Float                  @default(300)
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  stokReserved         Float                  @default(0)
+  RiwayatPerubahanStok RiwayatPerubahanStok[]
+  komposisi            KomposisiProduk[]
+  kemasan              KonfigurasiKemasan[]
+  gudang               Gudang                 @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+  masterKomoditas      MasterKomoditas?       @relation(fields: [masterKomoditasId], references: [id])
+
+  @@map("warehouse_products")
+}
+
+model KomposisiProduk {
+  id                String          @id @default(uuid())
+  produkGudangId    String
+  masterKomoditasId String
+  jumlahKg          Float
+  masterKomoditas   MasterKomoditas @relation(fields: [masterKomoditasId], references: [id])
+  produkGudang      ProdukGudang    @relation(fields: [produkGudangId], references: [id], onDelete: Cascade)
+
+  @@map("warehouse_product_composition")
+}
+
+model MasterKomoditas {
+  id                  String            @id @default(uuid())
+  nama                String            @unique
+  kategori            String?
+  satuan              String            @default("kg")
+  harga               Float             @default(0)
+  deskripsi           String?
+  gambarUrl           String?
+  kodeKomoditasGlobal String?           @unique
+  persenPenyusutan    Float             @default(0)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  penjualanKeluar     PenjualanKeluar[]
+  komposisiProduk     KomposisiProduk[]
+  produkGudang        ProdukGudang[]
+
+  @@map("master_komoditas")
+}
+
+model MasterVarian {
+  id        String   @id @default(uuid())
+  nama      String   @unique
+  deskripsi String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("master_varian")
+}
+
+model PengajuanVarian {
+  id             String                @id @default(uuid())
+  nama           String
+  deskripsi      String?
+  alasan         String?
+  diajukanOlehId String
+  gudangId       String?
+  status         StatusPengajuanVarian @default(MENUNGGU)
+  catatanAdmin   String?
+  ditinjauOlehId String?
+  ditinjauAt     DateTime?
+  masterVarianId String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([status])
+  @@index([diajukanOlehId])
+  @@map("varian_proposals")
+}
+
+model KonfigurasiKemasan {
+  id                  String       @id @default(uuid())
+  produkGudangId      String
+  ukuranKg            Float
+  stokKemasan         Int          @default(0)
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  stokKemasanReserved Int          @default(0)
+  produkGudang        ProdukGudang @relation(fields: [produkGudangId], references: [id], onDelete: Cascade)
+
+  @@unique([produkGudangId, ukuranKg])
+  @@map("warehouse_product_packaging")
+}
+
+model PermintaanPengadaan {
+  id                       String                    @id @default(uuid())
+  gudangId                 String
+  kodeKomoditasGlobal      String?
+  komoditasNama            String
+  masterProdukId           String?
+  jumlahTerjualKgBulanIni  Float                     @default(0)
+  jumlahTerjualKgBulanLalu Float                     @default(0)
+  trendPersen              Float?
+  trendArah                String?
+  jumlahSellerMenjual      Int                       @default(0)
+  targetKg                 Float
+  hargaAcuanPerKg          Float?
+  deadlinePanen            String?
+  catatan                  String?
+  status                   StatusPermintaanPengadaan @default(DRAFT)
+  periode                  String
+  tanggalDikirim           DateTime?
+  responsePetaniUrl        String?
+  totalKomitmenKg          Float                     @default(0)
+  jumlahKepalaPetaniRespon Int                       @default(0)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  nomorOrder               String?
+  qcDetail                 Json?
+  rencanaProduksi          Json?
+  sumberOrderId            String?
+  tanggalTiba              DateTime?
+  tipePesanan              String                    @default("MANUAL")
+  gudang                   Gudang                    @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+
+  @@index([gudangId, periode])
+  @@index([status])
+  @@map("warehouse_procurement_requests")
+}
+
+model PemrosesanGudang {
+  id                  String          @id @default(uuid())
+  penerimaanId        String
+  gudangId            String
+  komoditasNama       String
+  beratMasukKg        Float
+  tahap               TahapPemrosesan @default(SORTIR)
+  sortirSelesai       Boolean         @default(false)
+  sortirCatatan       String?
+  sortirBeratBersihKg Float?
+  sortirRejectKg      Float?
+  sortirOleh          String?
+  sortirAt            DateTime?
+  gradingSelesai      Boolean         @default(false)
+  gradeA_Kg           Float?
+  gradeB_Kg           Float?
+  gradeC_Kg           Float?
+  gradingCatatan      String?
+  gradingOleh         String?
+  gradingAt           DateTime?
+  kemasSelesai        Boolean         @default(false)
+  jumlahKemasan       Int?
+  beratPerKemasan     Float?
+  jenisKemasan        String?
+  kemasCatatan        String?
+  kemasOleh           String?
+  kemasAt             DateTime?
+  masukStok           Boolean         @default(false)
+  masukStokAt         DateTime?
+  produkGudangId      String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  gudang              Gudang          @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+
+  @@index([gudangId, tahap])
+  @@index([penerimaanId])
+  @@map("pemrosesan_gudang")
+}
+
+model HppProduk {
+  id              String   @id @default(uuid())
+  produkGudangId  String   @unique
+  gudangId        String
+  hargaBeliPetani Float    @default(0)
+  biayaSortir     Float    @default(0)
+  biayaGrading    Float    @default(0)
+  biayaPengemasan Float    @default(0)
+  biayaOverhead   Float    @default(0)
+  biayaLainnya    Float    @default(0)
+  totalHpp        Float    @default(0)
+  hargaJual       Float    @default(0)
+  marginRp        Float    @default(0)
+  marginPersen    Float    @default(0)
+  catatan         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  gudang          Gudang   @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+
+  @@index([gudangId])
+  @@map("hpp_produk")
+}
+
+model JadwalProduksi {
+  id                    String         @id @default(uuid())
+  gudangId              String
+  pengajuanId           String?
+  komoditasNama         String
+  volumeTotalKg         Float
+  kapasitasHarianKg     Float          @default(1000)
+  tenggat               DateTime
+  tanggalMulai          DateTime
+  tanggalSelesai        DateTime
+  estimasiHari          Int
+  statusJadwal          String         @default("DRAFT")
+  catatanJadwal         String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  detailKomoditas       Json?
+  laporanEksekusi       Json?
+  permintaanPengadaanId String?
+  hariProduksi          HariProduksi[]
+  gudang                Gudang         @relation(fields: [gudangId], references: [id], onDelete: Cascade)
+
+  @@index([gudangId, statusJadwal])
+  @@index([tenggat])
+  @@map("jadwal_produksi")
+}
+
+model HariProduksi {
+  id          String                @id @default(uuid())
+  jadwalId    String
+  hariKe      Int
+  tanggal     DateTime
+  targetKg    Float
+  realisasiKg Float?
+  statusHari  String                @default("BELUM")
+  catatan     String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  jadwal      JadwalProduksi        @relation(fields: [jadwalId], references: [id], onDelete: Cascade)
+  tenagaKerja TenagaKerjaBorongan[]
+
+  @@index([jadwalId])
+  @@map("hari_produksi")
+}
+
+model TenagaKerjaBorongan {
+  id             String       @id @default(uuid())
+  hariProduksiId String
+  namaPekerja    String
+  kgDikerjakan   Float
+  tarifPerKg     Float        @default(1500)
+  totalUpah      Float
+  catatan        String?
+  createdAt      DateTime     @default(now())
+  hariProduksi   HariProduksi @relation(fields: [hariProduksiId], references: [id], onDelete: Cascade)
+
+  @@index([hariProduksiId])
+  @@map("tenaga_kerja_borongan")
+}
+
+model RiwayatPerubahanStok {
+  id              String       @id @default(uuid())
+  produkGudangId  String
+  gudangId        String?
+  penggunaId      String
+  jenisStok       JenisStok
+  operasi         OperasiStok
+  jumlah          Float
+  ukuranKemasanKg Float?
+  stokSebelumnya  Float
+  stokSetelahnya  Float
+  keterangan      String?
+  createdAt       DateTime     @default(now())
+  gudang          Gudang?      @relation(fields: [gudangId], references: [id])
+  pengguna        Pengguna     @relation(fields: [penggunaId], references: [id])
+  produkGudang    ProdukGudang @relation(fields: [produkGudangId], references: [id])
+}
+
+enum JenisStok {
+  SEGAR
+  FROZEN
+}
+
+enum OperasiStok {
+  TAMBAH
+  KURANG
+  PENYESUAIAN
+}
+
+enum Peran {
+  SUPER_ADMIN
+  ADMIN_GUDANG
+  STAF_GUDANG
+}
+
+enum TipeGudang {
+  PUSAT
+  REGIONAL
+  COLLECTION
+}
+
+enum StatusGudang {
+  ACTIVE
+  INACTIVE
+  FULL
+  MAINTENANCE
+}
+
+enum StatusPenerimaan {
+  RECEIVED
+  VERIFIED
+  STOCKED
+}
+
+enum JenisPembeliKeluar {
+  PASAR
+  PENGEPUL
+  RESTORAN
+  INDIVIDU
+  LAINNYA
+}
+
+enum StatusPenjualanKeluar {
+  TERCATAT
+  LUNAS
+  BATAL
+}
+
+enum StatusPekerjaanBooking {
+  ANTRI
+  DIPROSES
+  QC_CHECK
+  PACKAGING
+  SELESAI
+}
+
+enum ModePengemasan {
+  DEFAULT
+  CUSTOM
+}
+
+enum StatusPengajuanStok {
+  DIAJUKAN
+  DIPROSES
+  DIKIRIM
+  KONFIRMASI_DITERIMA
+  SELESAI
+  DITOLAK
+  MENUNGGU_SEBAGIAN
+  TIBA
+}
+
+enum StatusPengajuanVarian {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+}
+
+enum StatusPermintaanPengadaan {
+  DRAFT
+  TERKIRIM
+  SEBAGIAN_TERPENUHI
+  TERPENUHI
+  DIBATALKAN
+  DITERIMA_PETANI
+  DALAM_PENGANTARAN
+  TIBA
+  SELESAI_QC
+  KADALUARSA
+}
+
+enum TahapPemrosesan {
+  SORTIR
+  GRADING
+  PENGEMASAN
+  STOK
+  SELESAI
+}
+
+enum TipePengiriman {
+  DEFAULT
+  CUSTOM
+}
