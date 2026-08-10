@@ -4,7 +4,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5005/api
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 60000,
 });
 
 // Add token to requests
