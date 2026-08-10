@@ -253,7 +253,7 @@ export const generateInvoicePDF = (request: any, itemUpdates: any[]) => {
     },
   });
 
-  // @ts-expect-error lastAutoTable is added by autoTable
+  // @ts-ignore lastAutoTable is added by autoTable
   curY = (doc as any).lastAutoTable.finalY + 8;
 
   // ── Catatan ──
@@ -393,7 +393,7 @@ export const generateBASTBPDF = (request: any, itemUpdates: any[]) => {
     },
   });
 
-  // @ts-expect-error lastAutoTable is added by autoTable
+  // @ts-ignore lastAutoTable is added by autoTable
   curY = (doc as any).lastAutoTable.finalY + 8;
 
   // ── Pernyataan ──
