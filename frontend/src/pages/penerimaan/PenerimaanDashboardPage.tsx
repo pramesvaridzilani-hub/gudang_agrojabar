@@ -38,7 +38,8 @@ const PenerimaanDashboardPage: React.FC = () => {
 
         // Check PETANI health
         try {
-          const petaniRes = await fetch('http://localhost:5000/api/health', { signal: AbortSignal.timeout(3000) });
+          const petaniUrl = import.meta.env.VITE_PETANI_API_URL || 'http://47.129.100.18:5000';
+          const petaniRes = await fetch(`${petaniUrl}/api/health`, { signal: AbortSignal.timeout(3000) });
           setPetaniActive(petaniRes.ok);
         } catch {
           setPetaniActive(false);

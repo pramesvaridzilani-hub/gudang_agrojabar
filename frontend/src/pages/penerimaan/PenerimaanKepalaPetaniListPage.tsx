@@ -38,7 +38,7 @@ const PenerimaanKepalaPetaniListPage: React.FC = () => {
       setError(null);
 
       // Fetch kepala petani directly from PETANI backend
-      const petaniUrl = 'http://localhost:5000';
+      const petaniUrl = import.meta.env.VITE_PETANI_API_URL || 'http://47.129.100.18:5000';
       const res = await fetch(`${petaniUrl}/api/all-data`);
       if (!res.ok) throw new Error('Gagal menghubungi PETANI service');
       const allData = await res.json();

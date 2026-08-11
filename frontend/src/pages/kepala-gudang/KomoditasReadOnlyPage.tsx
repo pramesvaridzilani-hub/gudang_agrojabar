@@ -34,8 +34,9 @@ const KomoditasReadOnlyPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch langsung dari API Petani (Port 5000)
-      const response = await fetch('http://localhost:5000/api/harga');
+      // Fetch langsung dari API Petani
+      const petaniUrl = import.meta.env.VITE_PETANI_API_URL || 'http://47.129.100.18:5000';
+      const response = await fetch(`${petaniUrl}/api/harga`);
 
       if (!response.ok) {
         throw new Error('Gagal memuat data komoditas dari petani');
