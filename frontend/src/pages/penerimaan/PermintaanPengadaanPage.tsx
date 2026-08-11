@@ -636,9 +636,19 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
                       required
                     >
                       <option value="">-- Pilih Komoditas --</option>
+                      {produkList.map((p) => (
+                        <option key={p.id} value={p.nama}>
+                          {p.nama}
+                        </option>
+                      ))}
                       <option value="Wortel">Wortel</option>
                       <option value="Jagung">Jagung</option>
                       <option value="Buncis">Buncis</option>
+                      {item.komoditasNama &&
+                        !['Wortel', 'Jagung', 'Buncis'].includes(item.komoditasNama) &&
+                        !produkList.some(p => p.nama.toLowerCase() === item.komoditasNama.toLowerCase()) && (
+                          <option value={item.komoditasNama}>{item.komoditasNama}</option>
+                        )}
                     </select>
                   )}
                 </div>

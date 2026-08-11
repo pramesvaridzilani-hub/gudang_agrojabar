@@ -62,7 +62,7 @@ interface CekStokKemasan {
 
 // Cek kecukupan stok per kemasan: pesanan ambil stok yang sudah dikemas sesuai
 // ukuran, defisit ditutup dari stok curah (bulk). Bila bulk pun tak cukup → kurang.
-const cekStokKemasan = (produkGudang: any, kemasan: KemasanLine[]): CekStokKemasan => {
+const cekStokKemasan = (produkGudang: any, kemasan: KemasanLine[], jumlahPermintaanRequested?: number): CekStokKemasan => {
   const bulkKg = Number(produkGudang?.stok ?? produkGudang?.stokBulk ?? 0);
   const kemasanGudang: any[] = produkGudang?.kemasan || [];
   const yieldLossPct = produkGudang?.masterKomoditas?.persenPenyusutan || 0;
@@ -97,8 +97,9 @@ const cekStokKemasan = (produkGudang: any, kemasan: KemasanLine[]): CekStokKemas
   if (hasRincian) {
     kekuranganKg = Math.round(Math.max(0, butuhDariBulkKg - finishedFromBulkKg) * 10) / 10;
   } else {
+    const requestedKg = Number(jumlahPermintaanRequested ?? produkGudang?.jumlahPermintaan ?? 0);
     const totalTersedia = Math.round((bulkKg + totalStokKemasanKg) * 10) / 10;
-    kekuranganKg = Math.round(Math.max(0, (Number(produkGudang?.jumlahPermintaan) || 0) - totalTersedia) * 10) / 10;
+    kekuranganKg = Math.round(Math.max(0, requestedKg - totalTersedia) * 10) / 10;
   }
 
   return {
@@ -303,63 +304,50 @@ const PengajuanDetailPage: React.FC = () => {
 
   // ── Teruskan SEMUA item yang kekurangan stok ke Ajukan Manual sekaligus ───────
   const handleTeruskanSemuaKePetani = () => {
-    const isDone = ['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK'].includes(request?.status || '');
+    const statusUpper = (request?.status || '').toUpperCase();
+    const isDone = ['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK', 'KONFIRMASI_DITERIMA'].includes(statusUpper);
     if (isDone) return;
 
-    // Map: komoditasNama → { defisit per ukuranKg }
-    const grouped: Record<string, { packMap: Record<string, number>, targetKg: number }> = {};
+    const prefilledItems: any[] = [];
 
     for (const item of request.items) {
       const u = itemUpdates.find((x) => x.itemId === item.id);
       const kemasan = u?.kemasanDetail ?? deriveKemasan(item);
-      const cek = cekStokKemasan(item.produkGudang, kemasan);
+      const reqQty = Number(u?.jumlahDisetujui ?? item.jumlahPermintaan ?? 0);
+      const cek = cekStokKemasan(item.produkGudang, kemasan, reqQty);
+
       if (cek.cukup || cek.kekuranganKg <= 0) continue;
 
-      const nama = item.produk?.nama || item.produkNama || 'Produk';
-      if (!grouped[nama]) grouped[nama] = { packMap: {}, targetKg: 0 };
+      const nama = item.produkGudang?.nama || item.produk?.nama || item.produkNama || 'Produk';
 
-      grouped[nama].targetKg += cek.kekuranganKg;
-      for (const line of cek.lines) {
-        if (line.defisitPack > 0) {
-          const key = String(line.ukuranKg);
-          grouped[nama].packMap[key] = (grouped[nama].packMap[key] || 0) + line.defisitPack;
-        }
-      }
-    }
+      let kemasanType = '1';
+      let packBesar = 0;
+      let packKecil = 0;
 
-    const prefilledItems = Object.entries(grouped).map(([nama, data]) => {
-      const { packMap, targetKg } = data;
-      const packBesar = Math.round(packMap['2.5'] || 0);
-      const packKecil = Math.round(packMap['1'] || 0);
-      const otherKey = Object.keys(packMap).find(k => k !== '2.5' && k !== '1');
+      const line25 = cek.lines.find(l => Number(l.ukuranKg) === 2.5);
+      const line1 = cek.lines.find(l => Number(l.ukuranKg) === 1);
 
-      let kemasan = '1';
-      let kemasanKombinasiBesar = '0';
-      let kemasanKombinasiKecil = '0';
-
-      if (packBesar > 0 && packKecil > 0) {
-        kemasan = 'kombinasi';
-        kemasanKombinasiBesar = String(packBesar);
-        kemasanKombinasiKecil = String(packKecil);
-      } else if (packBesar > 0) {
-        kemasan = '2.5';
-        kemasanKombinasiBesar = String(packBesar);
-      } else if (packKecil > 0) {
-        kemasan = '1';
-        kemasanKombinasiKecil = String(packKecil);
-      } else if (otherKey) {
-        kemasan = otherKey;
-        kemasanKombinasiBesar = String(Math.round(packMap[otherKey] || 0));
+      if (line25 && line1 && (line25.defisitPack > 0 || line1.defisitPack > 0)) {
+        kemasanType = 'kombinasi';
+        packBesar = Math.max(0, line25.defisitPack);
+        packKecil = Math.max(0, line1.defisitPack);
+      } else if (line25 && line25.defisitPack > 0) {
+        kemasanType = '2.5';
+        packBesar = line25.defisitPack;
+      } else if (line1 && line1.defisitPack > 0) {
+        kemasanType = '1';
+        packKecil = line1.defisitPack;
       }
 
-      return {
+      prefilledItems.push({
         komoditasNama: nama,
-        targetProduksiKg: String(Math.round(targetKg)),
-        kemasan,
-        kemasanKombinasiBesar,
-        kemasanKombinasiKecil,
-      };
-    });
+        targetProduksiKg: String(Math.round(cek.kekuranganKg)),
+        kemasan: kemasanType,
+        kemasanKombinasiBesar: String(packBesar),
+        kemasanKombinasiKecil: String(packKecil),
+        catatan: `Kebutuhan otomatis dari pengajuan #${request.id?.substring(0, 8)} (Kekurangan: ${cek.kekuranganKg} kg)`
+      });
+    }
 
     if (prefilledItems.length === 0) return;
 
@@ -368,14 +356,17 @@ const PengajuanDetailPage: React.FC = () => {
     });
   };
 
-  // Hitung apakah ada item yang kekurangan
-  const hasShortage = !['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK'].includes(request?.status || '') &&
-    request?.items?.some((item: any) => {
-      const u = itemUpdates.find((x) => x.itemId === item.id);
-      const kemasan = u?.kemasanDetail ?? deriveKemasan(item);
-      const cek = cekStokKemasan(item.produkGudang, kemasan);
-      return !cek.cukup && cek.kekuranganKg > 0;
-    });
+  // Hitung daftar item yang kekurangan stok
+  const shortageItems = (request?.items || []).map((item: any) => {
+    const u = itemUpdates.find((x) => x.itemId === item.id);
+    const kemasan = u?.kemasanDetail ?? deriveKemasan(item);
+    const reqQty = Number(u?.jumlahDisetujui ?? item.jumlahPermintaan ?? 0);
+    const cek = cekStokKemasan(item.produkGudang, kemasan, reqQty);
+    const nama = item.produkGudang?.nama || item.produk?.nama || item.produkNama || 'Produk';
+    return { item, cek, nama, kekuranganKg: cek.kekuranganKg };
+  }).filter(x => !x.cek.cukup && x.kekuranganKg > 0);
+
+  const hasShortage = !['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK', 'KONFIRMASI_DITERIMA'].includes((request?.status || '').toUpperCase()) && shortageItems.length > 0;
 
 
   if (loading) {
@@ -508,13 +499,48 @@ const PengajuanDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* Top Warning Banner jika ada barang yang stoknya kurang */}
+      {hasShortage && (
+        <div className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-xs">
+              <AlertCircle className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm">Stok Gudang Tidak Mencukupi! ({shortageItems.length} Barang Kurang)</h4>
+              <p className="text-xs text-rose-100 mt-0.5">
+                {shortageItems.map(s => `${s.nama}: kurang ${s.kekuranganKg} kg`).join(' · ')}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleTeruskanSemuaKePetani}
+            className="w-full sm:w-auto px-5 py-2.5 bg-white hover:bg-rose-50 text-rose-700 rounded-xl font-extrabold text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+          >
+            <Sprout className="w-4 h-4 text-emerald-600" />
+            Minta Semua ke Petani
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Daftar Barang */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2 pb-3 border-b border-slate-100">
-            <Package className="w-4 h-4 text-emerald-600" />
-            Daftar Barang ({request.items.length})
-          </h3>
+          <div className="flex items-center justify-between gap-2 flex-wrap pb-3 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              <Package className="w-4 h-4 text-emerald-600" />
+              Daftar Barang ({request.items.length})
+            </h3>
+            {hasShortage && (
+              <button
+                onClick={handleTeruskanSemuaKePetani}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
+              >
+                <Sprout className="w-4 h-4" />
+                Minta Semua ke Petani
+              </button>
+            )}
+          </div>
 
           <div className="space-y-3">
             {request.items.map((item: any) => {
