@@ -212,66 +212,9 @@ const PengajuanDetailPage: React.FC = () => {
     }
   };
 
-  // ── Buka modal teruskan ke petani untuk item yang stoknya kurang ─────────────
-  const openPengadaanModal = (item: any, kekuranganKg: number) => {
-    const defaultPenyusutan = item.produkGudang?.masterKomoditas?.persenPenyusutan || 0;
-    setPengadaanForm({
-      tambahKg: '0',
-      hargaAcuanPerKg: item.produkGudang?.hargaGudang ? String(item.produkGudang.hargaGudang) : '',
-      deadlinePanen: '',
-      catatan: `Pengadaan untuk memenuhi pesanan ${request.toko?.nama || 'seller'} (#${request.id.substring(0, 8)})`,
-    });
-    setPengadaanModal({ item, kekuranganKg, persenPenyusutan: defaultPenyusutan });
-  };
-
-  // ── Submit: buat PermintaanPengadaan lalu langsung kirim ke PETANI ───────────
-  const handleSubmitPengadaan = async () => {
-    if (!pengadaanModal) return;
-    const { item, kekuranganKg, persenPenyusutan } = pengadaanModal;
-    const penyusutanKg = kekuranganKg * (persenPenyusutan / 100);
-    const kebutuhanBersihDanPenyusutan = kekuranganKg + penyusutanKg;
-    const tambah = parseFloat(pengadaanForm.tambahKg) || 0;
-    const targetKg = Math.round((kebutuhanBersihDanPenyusutan + tambah) * 10) / 10;
-
-    if (targetKg <= 0) {
-      setMessage({ type: 'error', text: 'Target pengadaan harus lebih dari 0 kg.' });
-      return;
-    }
-
-    try {
-      setPengadaanLoading(true);
-      // 1. Buat permintaan pengadaan (DRAFT)
-      const createRes = await api.post('/permintaan-pengadaan', {
-        gudangId: request.gudangId,
-        komoditasNama: item.produk?.nama || item.produkNama || 'Komoditas',
-        kodeKomoditasGlobal: item.produkGudang?.kodeKomoditasGlobal || undefined,
-        targetKg,
-        hargaAcuanPerKg: pengadaanForm.hargaAcuanPerKg || undefined,
-        deadlinePanen: pengadaanForm.deadlinePanen || undefined,
-        catatan: pengadaanForm.catatan || undefined,
-      });
-
-      const ppId = createRes.data?.data?.id;
-      if (!ppId) throw new Error('Gagal membuat permintaan pengadaan.');
-
-      // 2. Langsung kirim ke PETANI
-      await api.post(`/permintaan-pengadaan/${ppId}/kirim`, {});
-
-      setMessage({
-        type: 'success',
-        text: `Permintaan pengadaan ${targetKg} kg ${item.produk?.nama || ''} berhasil diteruskan ke kepala petani.`,
-      });
-      setPengadaanModal(null);
-    } catch (error: any) {
-      const errMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Gagal meneruskan ke petani.';
-      setMessage({ type: 'error', text: errMsg });
-    } finally {
-      setPengadaanLoading(false);
-    }
-  };
-
+  // ── Teruskan item tunggal ke fitur Ajukan Kebutuhan (/ajukan-kebutuhan) ──────
   const handleTeruskanKePetani = (item: any, cek: CekStokKemasan) => {
-    const komoditas = item.produk?.nama || item.produkNama || '';
+    const komoditas = item.produkGudang?.nama || item.produk?.nama || item.produkNama || '';
     const targetKg = cek.kekuranganKg;
     
     let kemasanType = '1';
@@ -299,7 +242,26 @@ const PengajuanDetailPage: React.FC = () => {
       }
     }
 
-    navigate(`${prefix}/ajukan-kebutuhan?tab=manual&komoditas=${encodeURIComponent(komoditas)}&target=${targetKg}&kemasan=${kemasanType}&packBesar=${packBesar}&packKecil=${packKecil}`);
+    const prefilledItems = [{
+      komoditasNama: komoditas,
+      targetProduksiKg: String(Math.round(targetKg)),
+      kemasan: kemasanType,
+      kemasanKombinasiBesar: String(packBesar),
+      kemasanKombinasiKecil: String(packKecil),
+      catatan: `Kebutuhan otomatis dari pengajuan #${request?.id?.substring(0, 8)} (${komoditas}: ${targetKg} kg)`
+    }];
+
+    navigate(`${prefix}/ajukan-kebutuhan?tab=manual&komoditas=${encodeURIComponent(komoditas)}&target=${targetKg}&kemasan=${kemasanType}&packBesar=${packBesar}&packKecil=${packKecil}`, {
+      state: { prefilledItems }
+    });
+  };
+
+  const openPengadaanModal = (item: any, _kekuranganKg: number) => {
+    const u = itemUpdates.find((x) => x.itemId === item.id);
+    const kemasan = u?.kemasanDetail ?? deriveKemasan(item);
+    const reqQty = Number(u?.jumlahDisetujui ?? item.jumlahPermintaan ?? 0);
+    const cek = cekStokKemasan(item.produkGudang, kemasan, reqQty);
+    handleTeruskanKePetani(item, cek);
   };
 
   // ── Teruskan SEMUA item yang kekurangan stok ke Ajukan Manual sekaligus ───────
@@ -939,158 +901,6 @@ const PengajuanDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Modal Teruskan ke Kepala Petani ─────────────────────────────────── */}
-      {pengadaanModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setPengadaanModal(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-4 text-white flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0">
-                <Sprout className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm">Teruskan ke Kepala Petani</h3>
-                <p className="text-[11px] text-emerald-50/80">{pengadaanModal.item.produk?.nama}</p>
-              </div>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {/* Ringkasan kekurangan */}
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 space-y-1">
-                <div className="flex justify-between">
-                  <span>Kebutuhan pesanan</span>
-                  <span className="font-semibold">
-                    {(itemUpdates.find((u) => u.itemId === pengadaanModal.item.id)?.jumlahDisetujui ?? pengadaanModal.item.jumlahPermintaan).toLocaleString('id-ID')} kg
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Stok curah tersedia</span>
-                  <span className="font-semibold">{(Number(pengadaanModal.item.produkGudang?.stokBulk) || 0).toLocaleString('id-ID')} kg</span>
-                </div>
-                <div className="flex justify-between border-t border-amber-200/60 pt-1 mt-1">
-                  <span className="font-semibold">Kekurangan</span>
-                  <span className="font-bold text-amber-800">{pengadaanModal.kekuranganKg.toLocaleString('id-ID')} kg</span>
-                </div>
-              </div>
-
-              {/* Kalkulator Penyusutan */}
-              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-800 space-y-1.5">
-                <div className="flex justify-between items-center pb-1.5 border-b border-emerald-200/50">
-                  <span className="font-bold flex items-center gap-1.5">
-                    <Percent className="w-3.5 h-3.5" /> Kalkulator Penyusutan
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Penyusutan komoditas</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={pengadaanModal.persenPenyusutan}
-                      onChange={(e) => setPengadaanModal(p => p ? { ...p, persenPenyusutan: parseFloat(e.target.value) || 0 } : null)}
-                      className="w-14 px-1.5 py-0.5 text-right border border-emerald-300 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold bg-white"
-                    />
-                    <span className="font-medium">%</span>
-                  </div>
-                </div>
-                <div className="flex justify-between text-emerald-700/80">
-                  <span>Kekurangan bersih</span>
-                  <span>{pengadaanModal.kekuranganKg.toLocaleString('id-ID')} kg</span>
-                </div>
-                <div className="flex justify-between text-emerald-700/80">
-                  <span>+ Tambahan Penyusutan ({pengadaanModal.persenPenyusutan}%)</span>
-                  <span>{Math.round(pengadaanModal.kekuranganKg * (pengadaanModal.persenPenyusutan / 100) * 10) / 10} kg</span>
-                </div>
-              </div>
-
-              {/* Tambah kilo (buffer) */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                  <Plus className="w-3 h-3" />
-                  Tambahan Kilo (buffer manual)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={pengadaanForm.tambahKg}
-                    onChange={(e) => setPengadaanForm((p) => ({ ...p, tambahKg: e.target.value }))}
-                    className="w-full pl-3 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                  <span className="absolute right-3 top-3 text-xs text-slate-400">kg</span>
-                </div>
-                <div className="mt-3 p-2.5 bg-emerald-600 text-white rounded-lg flex justify-between items-center shadow-sm shadow-emerald-200">
-                  <span className="text-[11px] font-medium">Total diajukan ke petani:</span>
-                  <span className="font-black text-sm">
-                    {Math.round((pengadaanModal.kekuranganKg + (pengadaanModal.kekuranganKg * (pengadaanModal.persenPenyusutan / 100)) + (parseFloat(pengadaanForm.tambahKg) || 0)) * 10) / 10} kg
-                  </span>
-                </div>
-              </div>
-
-              {/* Harga acuan */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Harga Acuan per kg (opsional)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-slate-400">Rp</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={100}
-                    value={pengadaanForm.hargaAcuanPerKg}
-                    onChange={(e) => setPengadaanForm((p) => ({ ...p, hargaAcuanPerKg: e.target.value }))}
-                    placeholder="0"
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  />
-                </div>
-              </div>
-
-              {/* Deadline panen */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Target Deadline Panen (opsional)</label>
-                <input
-                  type="date"
-                  value={pengadaanForm.deadlinePanen}
-                  onChange={(e) => setPengadaanForm((p) => ({ ...p, deadlinePanen: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                />
-              </div>
-
-              {/* Catatan */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Catatan</label>
-                <textarea
-                  rows={2}
-                  value={pengadaanForm.catatan}
-                  onChange={(e) => setPengadaanForm((p) => ({ ...p, catatan: e.target.value }))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setPengadaanModal(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-white rounded-xl text-xs font-medium text-slate-500 transition-all"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitPengadaan}
-                disabled={pengadaanLoading}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {pengadaanLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                Kirim ke Petani
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
