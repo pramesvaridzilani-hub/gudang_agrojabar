@@ -314,37 +314,36 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
   const qPackKecil = queryParams.get('packKecil') || '0';
 
   const [items, setItems] = useState<any[]>(() => {
-    // Prioritas: prefilledItems (dari teruskan semua) > query params (dari teruskan satu) > default kosong
     if (prefilledItems && prefilledItems.length > 0) {
-      return prefilledItems.map((pi, idx) => ({
+      return prefilledItems.map((pi: any, idx: number) => ({
         id: Date.now().toString() + idx,
-        komoditasNama: pi.komoditasNama,
-        targetProduksiKg: pi.targetProduksiKg,
+        komoditasNama: pi.komoditasNama || '',
+        targetProduksiKg: pi.targetProduksiKg || '',
         orderVolumeKg: pi.targetProduksiKg
-          ? kgKePetani(parseFloat(pi.targetProduksiKg), getYieldLoss(pi.komoditasNama)).toString()
+          ? kgKePetani(parseFloat(pi.targetProduksiKg), getYieldLoss(pi.komoditasNama || '')).toString()
           : '',
         hargaAcuanPerKg: '',
         deadlinePanen: '',
-        catatan: '',
-        kemasan: pi.kemasan,
+        catatan: pi.catatan || '',
+        kemasan: pi.kemasan || '1',
         kemasanKustom: '5',
-        kemasanKombinasiBesar: pi.kemasanKombinasiBesar,
-        kemasanKombinasiKecil: pi.kemasanKombinasiKecil,
+        kemasanKombinasiBesar: pi.kemasanKombinasiBesar || '0',
+        kemasanKombinasiKecil: pi.kemasanKombinasiKecil || '0',
       }));
     }
 
     return [{
       id: Date.now().toString(),
       komoditasNama: qKomoditas || initialKomoditas || '',
-      targetProduksiKg: qTarget,
+      targetProduksiKg: qTarget || '',
       orderVolumeKg: qTarget ? kgKePetani(parseFloat(qTarget), getYieldLoss(qKomoditas || initialKomoditas || '')).toString() : '',
       hargaAcuanPerKg: '',
       deadlinePanen: '',
       catatan: '',
-      kemasan: qKemasan,
+      kemasan: qKemasan || '1',
       kemasanKustom: '5',
-      kemasanKombinasiBesar: qPackBesar,
-      kemasanKombinasiKecil: qPackKecil,
+      kemasanKombinasiBesar: qPackBesar || '0',
+      kemasanKombinasiKecil: qPackKecil || '0',
     }];
   });
 
@@ -353,6 +352,45 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
   const [success, setSuccess] = useState('');
   const [globalDeadline, setGlobalDeadline] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Sync items bila prefilledItems atau URL query params berubah
+  useEffect(() => {
+    if (prefilledItems && prefilledItems.length > 0) {
+      setItems(
+        prefilledItems.map((pi: any, idx: number) => ({
+          id: Date.now().toString() + idx,
+          komoditasNama: pi.komoditasNama || '',
+          targetProduksiKg: pi.targetProduksiKg || '',
+          orderVolumeKg: pi.targetProduksiKg
+            ? kgKePetani(parseFloat(pi.targetProduksiKg), getYieldLoss(pi.komoditasNama || '')).toString()
+            : '',
+          hargaAcuanPerKg: '',
+          deadlinePanen: '',
+          catatan: pi.catatan || '',
+          kemasan: pi.kemasan || '1',
+          kemasanKustom: '5',
+          kemasanKombinasiBesar: pi.kemasanKombinasiBesar || '0',
+          kemasanKombinasiKecil: pi.kemasanKombinasiKecil || '0',
+        }))
+      );
+    } else if (qKomoditas || qTarget) {
+      setItems([
+        {
+          id: Date.now().toString(),
+          komoditasNama: qKomoditas || initialKomoditas || '',
+          targetProduksiKg: qTarget || '',
+          orderVolumeKg: qTarget ? kgKePetani(parseFloat(qTarget), getYieldLoss(qKomoditas || initialKomoditas || '')).toString() : '',
+          hargaAcuanPerKg: '',
+          deadlinePanen: '',
+          catatan: '',
+          kemasan: qKemasan || '1',
+          kemasanKustom: '5',
+          kemasanKombinasiBesar: qPackBesar || '0',
+          kemasanKombinasiKecil: qPackKecil || '0',
+        }
+      ]);
+    }
+  }, [prefilledItems, qKomoditas, qTarget, initialKomoditas]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -380,14 +418,23 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
   useEffect(() => {
     if (produkList.length === 0 || hargaPetaniList.length === 0) return;
 
-    // Auto-fill harga per item berdasarkan komoditas
+    // Auto-fill harga per item berdasarkan komoditas & hitung orderVolumeKg
     setItems(prev => {
       const newItems = [...prev];
       let changed = false;
       newItems.forEach((item, idx) => {
-        if (item.hargaAcuanPerKg) return; // skip jika sudah ada
         const nama = item.komoditasNama;
         if (!nama) return;
+
+        // Calculate order volume if not set
+        if (item.targetProduksiKg && !item.orderVolumeKg) {
+          const yl = getYieldLoss(nama);
+          newItems[idx] = { ...newItems[idx], orderVolumeKg: kgKePetani(parseFloat(item.targetProduksiKg), yl).toString() };
+          changed = true;
+        }
+
+        if (item.hargaAcuanPerKg) return; // skip jika harga sudah ada
+
         const produk = produkList.find(p => p.nama.toLowerCase().includes(nama.toLowerCase()));
         if (!produk) return;
         const match = hargaPetaniList.find(hp =>
@@ -636,19 +683,21 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
                       required
                     >
                       <option value="">-- Pilih Komoditas --</option>
+                      {item.komoditasNama && (
+                        <option value={item.komoditasNama}>{item.komoditasNama}</option>
+                      )}
                       {produkList.map((p) => (
-                        <option key={p.id} value={p.nama}>
-                          {p.nama}
-                        </option>
+                        p.nama !== item.komoditasNama && (
+                          <option key={p.id} value={p.nama}>
+                            {p.nama}
+                          </option>
+                        )
                       ))}
-                      <option value="Wortel">Wortel</option>
-                      <option value="Jagung">Jagung</option>
-                      <option value="Buncis">Buncis</option>
-                      {item.komoditasNama &&
-                        !['Wortel', 'Jagung', 'Buncis'].includes(item.komoditasNama) &&
-                        !produkList.some(p => p.nama.toLowerCase() === item.komoditasNama.toLowerCase()) && (
-                          <option value={item.komoditasNama}>{item.komoditasNama}</option>
-                        )}
+                      {['Wortel', 'Jagung', 'Buncis'].map(k => (
+                        k !== item.komoditasNama && !produkList.some(p => p.nama === k) && (
+                          <option key={k} value={k}>{k}</option>
+                        )
+                      ))}
                     </select>
                   )}
                 </div>

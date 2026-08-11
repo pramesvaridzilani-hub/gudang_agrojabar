@@ -668,8 +668,8 @@ const PengajuanDetailPage: React.FC = () => {
                           {!cukup && (
                             <button
                               type="button"
-                              onClick={() => openPengadaanModal(item, cek.kekuranganKg)}
-                              className="px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-[0.98] shadow-sm shadow-red-200"
+                              onClick={() => handleTeruskanKePetani(item, cek)}
+                              className="px-3.5 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-[0.98] shadow-sm shadow-red-200 cursor-pointer"
                             >
                               <Sprout className="w-4 h-4" />
                               Minta ke Petani
