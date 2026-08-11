@@ -364,7 +364,7 @@ const PengajuanDetailPage: React.FC = () => {
     const cek = cekStokKemasan(item.produkGudang, kemasan, reqQty);
     const nama = item.produkGudang?.nama || item.produk?.nama || item.produkNama || 'Produk';
     return { item, cek, nama, kekuranganKg: cek.kekuranganKg };
-  }).filter(x => !x.cek.cukup && x.kekuranganKg > 0);
+  }).filter((x: any) => !x.cek.cukup && x.kekuranganKg > 0);
 
   const hasShortage = !['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK', 'KONFIRMASI_DITERIMA'].includes((request?.status || '').toUpperCase()) && shortageItems.length > 0;
 
@@ -509,7 +509,7 @@ const PengajuanDetailPage: React.FC = () => {
             <div>
               <h4 className="font-bold text-sm">Stok Gudang Tidak Mencukupi! ({shortageItems.length} Barang Kurang)</h4>
               <p className="text-xs text-rose-100 mt-0.5">
-                {shortageItems.map(s => `${s.nama}: kurang ${s.kekuranganKg} kg`).join(' · ')}
+                {shortageItems.map((s: any) => `${s.nama}: kurang ${s.kekuranganKg} kg`).join(' · ')}
               </p>
             </div>
           </div>
