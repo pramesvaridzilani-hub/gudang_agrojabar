@@ -47,10 +47,30 @@ export const getStockRequestById = async (req: AuthenticatedRequest, res: Respon
     // Fetch matching ProdukGudang with its packaging config to enrich payload for builder UI
     const itemsWithProductConfig = await Promise.all(
       request.items.map(async (item) => {
-        const produkGudang = await prisma.produkGudang.findUnique({
-          where: { id: item.produkId },
-          include: { kemasan: { orderBy: { ukuranKg: 'asc' } }, masterKomoditas: true }
-        });
+        let produkGudang = null;
+        if (item.produkId) {
+          produkGudang = await prisma.produkGudang.findUnique({
+            where: { id: item.produkId },
+            include: { kemasan: { orderBy: { ukuranKg: 'asc' } }, masterKomoditas: true }
+          });
+          if (!produkGudang) {
+            produkGudang = await prisma.produkGudang.findFirst({
+              where: { id: item.produkId, gudangId: request.gudangId },
+              include: { kemasan: { orderBy: { ukuranKg: 'asc' } }, masterKomoditas: true }
+            });
+          }
+        }
+        
+        if (!produkGudang && item.produkNama) {
+          produkGudang = await prisma.produkGudang.findFirst({
+            where: {
+              gudangId: request.gudangId,
+              nama: { equals: item.produkNama, mode: 'insensitive' }
+            },
+            include: { kemasan: { orderBy: { ukuranKg: 'asc' } }, masterKomoditas: true }
+          });
+        }
+
         return {
           ...item,
           produkGudang

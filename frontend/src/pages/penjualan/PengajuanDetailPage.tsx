@@ -552,11 +552,11 @@ const PengajuanDetailPage: React.FC = () => {
                     const isDone = ['SELESAI', 'DIKIRIM', 'TIBA', 'DITOLAK', 'KONFIRMASI_DITERIMA'].includes(statusUpper);
                     if (isDone) return null;
                     
-                    const cek = cekStokKemasan(item.produkGudang, kemasan);
+                    const cek = cekStokKemasan(item.produkGudang, kemasan, qty);
                     // Fallback jika tidak ada rincian kemasan dari seller, cek kecukupan terhadap total permintaan kg
                     if (!cek.hasRincian) {
                       const totalTersedia = Math.round((cek.bulkKg + cek.totalStokKemasanKg) * 10) / 10;
-                      cek.kekuranganKg = Math.max(0, Math.round(((item.jumlahPermintaan || 0) - totalTersedia) * 10) / 10);
+                      cek.kekuranganKg = Math.max(0, Math.round(((qty || 0) - totalTersedia) * 10) / 10);
                       cek.cukup = cek.kekuranganKg <= 0;
                     }
                     const cukup = cek.cukup;
