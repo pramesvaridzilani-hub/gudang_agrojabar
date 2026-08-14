@@ -829,10 +829,16 @@ const PengajuanDetailPage: React.FC = () => {
                   <>
                     <button
                       onClick={() => handleStatusUpdate('DIPROSES')}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                      disabled={hasShortage}
+                      title={hasShortage ? "Stok tidak mencukupi. Gunakan tombol 'Minta ke Petani' terlebih dahulu." : ""}
+                      className={`w-full py-2.5 rounded-xl text-xs font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 ${
+                        hasShortage
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
                     >
                       <CheckCircle className="w-4 h-4" />
-                      Setujui &amp; Proses
+                      {hasShortage ? 'Setujui & Proses (Stok Kurang)' : 'Setujui & Proses'}
                     </button>
                     <button
                       onClick={() => handleStatusUpdate('DITOLAK')}
