@@ -11,7 +11,10 @@ import {
   Clock, 
   Package, 
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  Trophy,
+  BarChart2,
+  ShoppingBag
 } from 'lucide-react';
 
 interface TrendData {
@@ -30,6 +33,8 @@ export default function TrenTokoLanggananPage() {
   const user = useAuthStore(state => state.user);
   const gudangId = user?.managedWarehouses?.[0]?.id; // Ambil gudangId dari auth user
   const [data, setData] = useState<TrendData[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [globalTrends, setGlobalTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState('');
@@ -39,11 +44,20 @@ export default function TrenTokoLanggananPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/gudang/${gudangId}/trend-toko-langganan`);
-      setData(res.data.data);
-      setLastUpdated(res.data.lastUpdated);
-      setPeriodLabel(res.data.periodLabel);
-      setPrevPeriodLabel(res.data.prevPeriodLabel);
+      const [demandRes, topRes, globalRes] = await Promise.all([
+        api.get(`/gudang/${gudangId}/trend-toko-langganan`),
+        api.get(`/gudang/${gudangId}/analytics/produk-terlaris?limit=5&period=MONTH`),
+        api.get(`/gudang/${gudangId}/analytics/tren-komoditas-global`)
+      ]);
+
+      setData(demandRes.data.data);
+      setLastUpdated(demandRes.data.lastUpdated);
+      setPeriodLabel(demandRes.data.periodLabel);
+      setPrevPeriodLabel(demandRes.data.prevPeriodLabel);
+      
+      setTopProducts(topRes.data.data?.data || []);
+      setGlobalTrends(globalRes.data.data?.data || []);
+
       setError('');
     } catch (err: any) {
       console.error(err);
@@ -100,32 +114,107 @@ export default function TrenTokoLanggananPage() {
         </div>
       )}
 
-      {/* Info Card */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-6 text-white shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="bg-white/20 p-3 rounded-lg">
-            <Package className="w-8 h-8 text-white" />
+      {/* Dashboard Top Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Widget 1: Top 5 Produk Terlaris */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center justify-between">
+            <h2 className="font-bold text-amber-900 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-600" />
+              Top 5 Produk Terlaris
+            </h2>
+            <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded-md">Bulan Ini</span>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold mb-1">Pemantauan Pasar Global Aktif</h2>
-            <p className="text-emerald-50 text-sm leading-relaxed max-w-3xl">
-              Gudang secara otomatis memantau kecepatan jualan dari <strong>seluruh toko E-Commerce</strong> yang ada. 
-              <strong> Rekomendasi Smart Buffer</strong> menunjukkan proyeksi jumlah stok minimal yang sebaiknya diproduksi agar Gudang selalu siap saat toko mana pun membutuhkan pasokan.
-            </p>
-            {lastUpdated && (
-              <div className="flex flex-col gap-1 mt-3">
-                <p className="text-emerald-100 text-xs flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  Periode Analisis: {periodLabel} (dibandingkan {prevPeriodLabel})
-                </p>
-                <p className="text-emerald-100 text-xs flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3" />
-                  Update Terakhir: {new Date(lastUpdated).toLocaleString('id-ID')}
-                </p>
+          <div className="p-4 flex-1">
+            {loading ? (
+              <div className="flex justify-center items-center h-full min-h-[200px]"><RefreshCw className="w-6 h-6 text-amber-500 animate-spin" /></div>
+            ) : topProducts.length > 0 ? (
+              <div className="space-y-4">
+                {topProducts.map((cat: any) => (
+                  <div key={cat.kategoriNama}>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{cat.kategoriNama}</h3>
+                    <div className="space-y-2">
+                      {cat.produk?.map((p: any, idx: number) => (
+                        <div key={p.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-100 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-800 text-sm">{p.nama}</p>
+                              <p className="text-xs text-gray-500">{p.tokoNama}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-900 text-sm">{p.totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-gray-400">
+                <Trophy className="w-10 h-10 mb-2 text-gray-200" />
+                <p className="text-sm">Belum ada data produk terlaris bulan ini.</p>
               </div>
             )}
           </div>
         </div>
+
+        {/* Widget 2: Tren Komoditas Global */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
+            <h2 className="font-bold text-blue-900 flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-blue-600" />
+              Tren Komoditas Global (E-Commerce)
+            </h2>
+            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-md">MoM Growth</span>
+          </div>
+          <div className="p-4 flex-1">
+            {loading ? (
+              <div className="flex justify-center items-center h-full min-h-[200px]"><RefreshCw className="w-6 h-6 text-blue-500 animate-spin" /></div>
+            ) : globalTrends.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {globalTrends.map((trend: any) => (
+                  <div key={trend.kodeKomoditasGlobal} className="border border-gray-100 rounded-xl p-3 bg-gray-50 hover:bg-white hover:shadow-sm transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="font-semibold text-gray-800">{trend.komoditasNama}</p>
+                      <div className={`flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${trend.trendArah === 'UP' ? 'bg-emerald-100 text-emerald-700' : trend.trendArah === 'DOWN' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700'}`}>
+                        {trend.trendArah === 'UP' ? <TrendingUp className="w-3 h-3" /> : trend.trendArah === 'DOWN' ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                        {trend.trendPersen}%
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-end text-xs text-gray-500">
+                      <div>
+                        <p>Bulan ini: <span className="font-semibold text-gray-700">{trend.jumlahTerjualKgBulanIni} kg</span></p>
+                        <p>Bulan lalu: {trend.jumlahTerjualKgBulanLalu} kg</p>
+                      </div>
+                      <p className="font-medium text-blue-600">{trend.jumlahSellerMenjual} Penjual</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-gray-400">
+                <BarChart2 className="w-10 h-10 mb-2 text-gray-200" />
+                <p className="text-sm">Belum ada data tren komoditas global.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      <div className="mt-8 mb-4">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <ShoppingBag className="w-6 h-6 text-emerald-600" />
+          Sinyal Kebutuhan Gudang (Demand Signal)
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">Berdasarkan kecepatan jualan toko-toko yang disuplai gudang ini. 
+        Update Terakhir: {lastUpdated ? new Date(lastUpdated).toLocaleString('id-ID') : '-'}</p>
       </div>
 
       {/* Main Content */}

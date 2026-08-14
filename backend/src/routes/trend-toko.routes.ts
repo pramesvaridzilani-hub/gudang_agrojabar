@@ -76,5 +76,56 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Terjadi kesalahan server saat mengambil data tren toko dari e-commerce.' });
   }
 });
+// GET /api/gudang/:id/analytics/produk-terlaris
+router.get('/:id/analytics/produk-terlaris', async (req: Request, res: Response) => {
+  try {
+    const { period, limit, sortBy, startDate, endDate, kategoriId } = req.query;
+    
+    const axios = require('axios');
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+    const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
+
+    const params = new URLSearchParams();
+    if (period) params.set('period', period as string);
+    if (limit) params.set('limit', limit as string);
+    if (sortBy) params.set('sortBy', sortBy as string);
+    if (startDate) params.set('startDate', startDate as string);
+    if (endDate) params.set('endDate', endDate as string);
+    if (kategoriId) params.set('kategoriId', kategoriId as string);
+
+    const response = await axios.get(`${ecomUrl}/api/analytics/produk-terlaris?${params.toString()}`, {
+      headers: { 'x-api-key': ecomKey }
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching produk terlaris:', error.message);
+    res.status(500).json({ error: 'Gagal mengambil data produk terlaris dari e-commerce.' });
+  }
+});
+
+// GET /api/gudang/:id/analytics/tren-komoditas-global
+router.get('/:id/analytics/tren-komoditas-global', async (req: Request, res: Response) => {
+  try {
+    const { kodeKomoditasGlobal, bulanKe } = req.query;
+    
+    const axios = require('axios');
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+    const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
+
+    const params = new URLSearchParams();
+    if (kodeKomoditasGlobal) params.set('kodeKomoditasGlobal', kodeKomoditasGlobal as string);
+    if (bulanKe) params.set('bulanKe', bulanKe as string);
+
+    const response = await axios.get(`${ecomUrl}/api/analytics/tren-komoditas-global?${params.toString()}`, {
+      headers: { 'x-api-key': ecomKey }
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching tren komoditas global:', error.message);
+    res.status(500).json({ error: 'Gagal mengambil data tren komoditas global dari e-commerce.' });
+  }
+});
 
 export default router;
