@@ -13,7 +13,7 @@ import axios from 'axios';
 import {
   TrendingUp, TrendingDown, Minus, Send, Plus, Package,
   CheckCircle2, Loader2, AlertTriangle, ChevronDown, ChevronUp,
-  Users, Wheat, RefreshCw, X, Check
+  Users, Wheat, RefreshCw, X, Check, Trophy, BarChart2, ShoppingBag
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useLocation } from 'react-router-dom';
@@ -1333,6 +1333,8 @@ const PermintaanPengadaanPage: React.FC = () => {
 
   const [myGudangId, setMyGudangId] = useState<string | null>(null);
   const [demandData, setDemandData] = useState<DemandSignalData | null>(null);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [globalTrends, setGlobalTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -1360,13 +1362,25 @@ const PermintaanPengadaanPage: React.FC = () => {
       else if (activePeriod === 'tahun') periodParam = 'YEAR';
       else if (activePeriod === 'semua') periodParam = '6_MONTHS';
 
-      const res = await axios.get(`${API}/permintaan-pengadaan/demand-signal`, {
-        params: { gudangId: myGudangId, period: periodParam },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Handle wrapped NestJS response { success: true, data: { gudangId, period, data: [] } }
+      const [res, topRes, globalRes] = await Promise.all([
+        axios.get(`${API}/permintaan-pengadaan/demand-signal`, {
+          params: { gudangId: myGudangId, period: periodParam },
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${API}/gudang/${myGudangId}/analytics/produk-terlaris`, {
+          params: { limit: 5, period: periodParam },
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${API}/gudang/${myGudangId}/analytics/tren-komoditas-global`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ]);
+
       const payload = res.data?.data || res.data;
       setDemandData(payload);
+      
+      setTopProducts(topRes.data.data?.data || []);
+      setGlobalTrends(globalRes.data.data?.data || []);
     } catch (err) {
       console.error('Gagal ambil demand signal:', err);
     } finally {
@@ -1465,6 +1479,96 @@ const PermintaanPengadaanPage: React.FC = () => {
             </div>
           ) : demandData && demandData.period ? (
             <>
+              {/* Dashboard Top Widgets */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                
+                {/* Widget 1: Top 5 Produk Terlaris */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50 flex items-center justify-between">
+                    <h2 className="font-bold text-amber-900 flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-amber-600" />
+                      Top 5 Produk Terlaris
+                    </h2>
+                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded-md capitalize">{activePeriod} Ini</span>
+                  </div>
+                  <div className="p-4 flex-1">
+                    {topProducts.length > 0 ? (
+                      <div className="space-y-4">
+                        {topProducts.map((cat: any) => (
+                          <div key={cat.kategoriNama}>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{cat.kategoriNama}</h3>
+                            <div className="space-y-2">
+                              {cat.produk?.map((p: any, idx: number) => (
+                                <div key={p.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-100 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
+                                      {idx + 1}
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-gray-800 text-sm">{p.nama}</p>
+                                      <p className="text-xs text-gray-500">{p.tokoNama}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-bold text-gray-900 text-sm">{p.totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-gray-400">
+                        <Trophy className="w-8 h-8 mb-2 text-gray-200" />
+                        <p className="text-sm">Belum ada data produk terlaris.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Widget 2: Tren Komoditas Global */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
+                    <h2 className="font-bold text-blue-900 flex items-center gap-2">
+                      <BarChart2 className="w-5 h-5 text-blue-600" />
+                      Tren Komoditas Global
+                    </h2>
+                    <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-md">MoM Growth</span>
+                  </div>
+                  <div className="p-4 flex-1">
+                    {globalTrends.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {globalTrends.map((trend: any) => (
+                          <div key={trend.kodeKomoditasGlobal} className="border border-gray-100 rounded-xl p-3 bg-gray-50 hover:bg-white hover:shadow-sm transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                              <p className="font-semibold text-gray-800">{trend.komoditasNama}</p>
+                              <div className={`flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${trend.trendArah === 'UP' ? 'bg-emerald-100 text-emerald-700' : trend.trendArah === 'DOWN' ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700'}`}>
+                                {trend.trendArah === 'UP' ? <TrendingUp className="w-3 h-3" /> : trend.trendArah === 'DOWN' ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                                {trend.trendPersen}%
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-end text-xs text-gray-500">
+                              <div>
+                                <p>Bulan ini: <span className="font-semibold text-gray-700">{trend.jumlahTerjualKgBulanIni} kg</span></p>
+                                <p>Bulan lalu: {trend.jumlahTerjualKgBulanLalu} kg</p>
+                              </div>
+                              <p className="font-medium text-blue-600">{trend.jumlahSellerMenjual} Penjual</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-gray-400">
+                        <BarChart2 className="w-8 h-8 mb-2 text-gray-200" />
+                        <p className="text-sm">Belum ada data tren komoditas global.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
               {/* Info summary */}
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
