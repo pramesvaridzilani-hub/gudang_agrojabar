@@ -134,7 +134,15 @@ export const updateStockRequestStatus = async (req: AuthenticatedRequest, res: R
         }
 
         const bulkTersedia = Number(produkGudang.stok) || 0;
-        const kemasanDetailList = item.kemasanDetail || [];
+        let kemasanDetailList = item.kemasanDetail || [];
+        if (kemasanDetailList.length === 0 && item.ukuranKemasanKg && item.jumlahKemasan) {
+          kemasanDetailList = [
+            {
+              ukuranKg: item.ukuranKemasanKg,
+              jumlahKemasan: item.jumlahKemasan,
+            } as any
+          ];
+        }
 
         if (kemasanDetailList.length > 0) {
           // Hitung total kg yang perlu diambil dari bulk untuk menutup defisit pack
@@ -153,11 +161,21 @@ export const updateStockRequestStatus = async (req: AuthenticatedRequest, res: R
             kekurangan.push(`${produkGudang.nama}: kurang ${kurangKg} kg (perlu dikemas ${butuhDariBulk} kg dari curah, stok curah ${bulkTersedia} kg)`);
           }
         } else {
-          // Tanpa rincian kemasan → ambil langsung dari bulk
+          // Tanpa rincian kemasan → ambil dari bulk ATAU stok kemasan apapun yang ada
           const qtyToDeduct = item.jumlahDisetujui || item.jumlahPermintaan;
-          if (qtyToDeduct > bulkTersedia) {
-            const kurangKg = Math.round((qtyToDeduct - bulkTersedia) * 10) / 10;
-            kekurangan.push(`${produkGudang.nama}: kurang ${kurangKg} kg (butuh ${qtyToDeduct} kg, stok ${bulkTersedia} kg)`);
+          
+          let totalKemasanKg = 0;
+          if (produkGudang.kemasan) {
+             for (const k of produkGudang.kemasan) {
+                totalKemasanKg += Number(k.stokKemasan) * Number(k.ukuranKg);
+             }
+          }
+          
+          const totalTersedia = bulkTersedia + totalKemasanKg;
+          
+          if (qtyToDeduct > totalTersedia) {
+            const kurangKg = Math.round((qtyToDeduct - totalTersedia) * 10) / 10;
+            kekurangan.push(`${produkGudang.nama}: kurang ${kurangKg} kg (butuh ${qtyToDeduct} kg, total stok ${totalTersedia} kg)`);
           }
         }
       }
@@ -304,19 +322,45 @@ export const updateStockRequestStatus = async (req: AuthenticatedRequest, res: R
             // Fallback: If no packaging details were specified at all, deduct from bulk stock directly
             if (kemasanDetailList.length === 0 && qtyToDeduct > 0) {
               const reservedBulk = Number(item.jumlahDireservasi || 0);
-              await prisma.produkGudang.update({
-                where: { id: produkGudang.id },
-                data: {
-                  stok: { decrement: qtyToDeduct },
-                  stokReserved: { decrement: reservedBulk }
+              let remainingToDeduct = qtyToDeduct;
+
+              const bulkTersedia = Number(produkGudang.stok) || 0;
+              const deductFromBulk = Math.min(bulkTersedia, remainingToDeduct);
+
+              if (deductFromBulk > 0) {
+                await prisma.produkGudang.update({
+                  where: { id: produkGudang.id },
+                  data: {
+                    stok: { decrement: deductFromBulk },
+                    stokReserved: { decrement: Math.min(deductFromBulk, reservedBulk) }
+                  }
+                });
+                remainingToDeduct -= deductFromBulk;
+                console.log(`[Stok Gudang] Deducted ${deductFromBulk}kg from bulk stock for ${produkGudang.nama}`);
+              }
+
+              if (remainingToDeduct > 0 && produkGudang.kemasan) {
+                for (const k of produkGudang.kemasan) {
+                  if (remainingToDeduct <= 0) break;
+                  const stokKg = Number(k.stokKemasan) * Number(k.ukuranKg);
+                  if (stokKg > 0) {
+                    const takeKg = Math.min(remainingToDeduct, stokKg);
+                    const takePacks = Math.ceil(takeKg / Number(k.ukuranKg));
+                    
+                    await prisma.konfigurasiKemasan.update({
+                      where: { id: k.id },
+                      data: { stokKemasan: { decrement: takePacks } }
+                    });
+                    remainingToDeduct -= (takePacks * Number(k.ukuranKg));
+                    console.log(`[Stok Gudang] Deducted ${takePacks} packs of ${k.ukuranKg}kg for ${produkGudang.nama}`);
+                  }
                 }
-              });
+              }
               
               await prisma.itemPengajuanStok.update({
                 where: { id: item.id },
                 data: { jumlahDireservasi: 0 }
               });
-              console.log(`[Stok Gudang] Fulfill ${qtyToDeduct}kg directly from bulk stock (no packaging breakdown specified) for ${produkGudang.nama}`);
             }
           } else {
             console.warn(`[Stok Gudang] Peringatan: Produk sumber untuk '${item.produkNama}' tidak ditemukan di Gudang ${updatedRequest.gudangId}. Stok tidak dikurangi.`);

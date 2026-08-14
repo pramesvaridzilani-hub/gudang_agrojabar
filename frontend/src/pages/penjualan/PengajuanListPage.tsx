@@ -9,7 +9,8 @@ import {
   Warehouse,
   Store,
   Loader2,
-  ChevronRight
+  ChevronRight,
+  Sprout
 } from 'lucide-react';
 
 const PengajuanListPage: React.FC = () => {
@@ -277,6 +278,16 @@ const PengajuanListPage: React.FC = () => {
                             className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-400 text-[10px] font-bold flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap w-full shadow-sm"
                           >
                             {allocatingId === req.id ? 'Memproses...' : 'Alokasikan Stok'}
+                          </button>
+                        )}
+                        {req.status === 'MENUNGGU_SEBAGIAN' && (
+                          <button
+                            onClick={() => navigate(`${prefix}/ajukan-kebutuhan?tab=sinyal`)}
+                            className="bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap w-full shadow-sm"
+                            title="Stok tidak mencukupi, teruskan ke petani"
+                          >
+                            <Sprout size={12} />
+                            Minta Petani
                           </button>
                         )}
                         <button
