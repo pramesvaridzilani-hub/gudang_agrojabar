@@ -20,7 +20,7 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
 
     // Ambil data nyata dari E-Commerce Service
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'https://api.agro-ecommerce.web.id';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const response = await axios.get(`${ecomUrl}/api/analytics/demand-signal/gudang?gudangId=${gudangId}`, {
@@ -73,6 +73,16 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error fetching trend toko:', error.message);
+    if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+      return res.json({
+        gudangId: req.params.id,
+        gudangNama: 'Gudang',
+        lastUpdated: new Date().toISOString(),
+        periodLabel: 'Tidak Tersedia',
+        prevPeriodLabel: 'Tidak Tersedia',
+        data: []
+      });
+    }
     res.status(500).json({ error: 'Terjadi kesalahan server saat mengambil data tren toko dari e-commerce.' });
   }
 });
@@ -82,7 +92,7 @@ router.get('/:id/analytics/produk-terlaris', async (req: Request, res: Response)
     const { period, limit, sortBy, startDate, endDate, kategoriId } = req.query;
     
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'https://api.agro-ecommerce.web.id';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const params = new URLSearchParams();
@@ -100,6 +110,12 @@ router.get('/:id/analytics/produk-terlaris', async (req: Request, res: Response)
     res.json(response.data);
   } catch (error: any) {
     console.error('Error fetching produk terlaris:', error.message);
+    if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+      return res.json({
+        success: true,
+        data: { period: {}, totalKategori: 0, data: [] }
+      });
+    }
     res.status(500).json({ error: 'Gagal mengambil data produk terlaris dari e-commerce.' });
   }
 });
@@ -110,7 +126,7 @@ router.get('/:id/analytics/tren-komoditas-global', async (req: Request, res: Res
     const { kodeKomoditasGlobal, bulanKe } = req.query;
     
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'https://api.agro-ecommerce.web.id';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const params = new URLSearchParams();
@@ -124,6 +140,12 @@ router.get('/:id/analytics/tren-komoditas-global', async (req: Request, res: Res
     res.json(response.data);
   } catch (error: any) {
     console.error('Error fetching tren komoditas global:', error.message);
+    if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+      return res.json({
+        success: true,
+        data: { data: [] }
+      });
+    }
     res.status(500).json({ error: 'Gagal mengambil data tren komoditas global dari e-commerce.' });
   }
 });
