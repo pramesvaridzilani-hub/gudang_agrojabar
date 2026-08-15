@@ -20,7 +20,7 @@ router.get('/:id/trend-toko-langganan', async (req: Request, res: Response) => {
 
     // Ambil data nyata dari E-Commerce Service
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://localhost:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const response = await axios.get(`${ecomUrl}/api/analytics/demand-signal/gudang?gudangId=${gudangId}`, {
@@ -92,7 +92,7 @@ router.get('/:id/analytics/produk-terlaris', async (req: Request, res: Response)
     const { period, limit, sortBy, startDate, endDate, kategoriId } = req.query;
     
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://localhost:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const params = new URLSearchParams();
@@ -126,7 +126,7 @@ router.get('/:id/analytics/tren-komoditas-global', async (req: Request, res: Res
     const { kodeKomoditasGlobal, bulanKe } = req.query;
     
     const axios = require('axios');
-    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+    const ecomUrl = process.env.ECOMMERCE_BACKEND_URL || 'http://localhost:4000';
     const ecomKey = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
     const params = new URLSearchParams();

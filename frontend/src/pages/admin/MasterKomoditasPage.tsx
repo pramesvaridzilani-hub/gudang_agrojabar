@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, AlertCircle, Check, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, AlertCircle, Check, X, Upload, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 interface MasterKomoditas {
@@ -27,6 +27,7 @@ const MasterKomoditasPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploadingGambar, setUploadingGambar] = useState(false);
   const [formData, setFormData] = useState({
     nama: '',
     kategori: '',
@@ -160,6 +161,37 @@ const MasterKomoditasPage: React.FC = () => {
       fetchKomoditas();
     } catch (err: any) {
       alert('Error: ' + err.message);
+    }
+  };
+
+  const handleUploadGambar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+
+    try {
+      setUploadingGambar(true);
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'komoditas/master');
+
+      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5005/api') + '/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: fd,
+      });
+
+      if (!res.ok) {
+        throw new Error('Gagal mengunggah gambar');
+      }
+
+      const data = await res.json();
+      setFormData(prev => ({ ...prev, gambarUrl: data.data.url }));
+    } catch (err: any) {
+      alert(err.message || 'Gagal mengunggah gambar');
+    } finally {
+      setUploadingGambar(false);
     }
   };
 
@@ -316,15 +348,35 @@ const MasterKomoditasPage: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  URL Gambar
+                  Gambar Komoditas
                 </label>
-                <input
-                  type="url"
-                  value={formData.gambarUrl}
-                  onChange={(e) => setFormData({ ...formData, gambarUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="file"
+                    id="upload-gambar"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleUploadGambar}
+                    disabled={uploadingGambar}
+                  />
+                  <label
+                    htmlFor="upload-gambar"
+                    className={`flex items-center gap-2 px-3 py-2 ${uploadingGambar ? 'bg-slate-400' : 'bg-slate-100 hover:bg-slate-200'} text-slate-700 rounded-lg cursor-pointer transition-colors border border-slate-300 text-sm`}
+                  >
+                    {uploadingGambar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {uploadingGambar ? 'Mengunggah...' : 'Upload Gambar'}
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.gambarUrl}
+                    onChange={(e) => setFormData({ ...formData, gambarUrl: e.target.value })}
+                    placeholder="Atau masukkan URL gambar (https://...)"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                  />
+                </div>
+                {formData.gambarUrl && (
+                  <img src={formData.gambarUrl} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-slate-200 mt-2" />
+                )}
               </div>
 
               <div className="flex gap-2 pt-4">

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import axios from 'axios';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware';
 
-const ECOMMERCE_URL = process.env.ECOMMERCE_BACKEND_URL || 'http://127.0.0.1:4000';
+const ECOMMERCE_URL = process.env.ECOMMERCE_BACKEND_URL || 'http://localhost:4000';
 const ECOMMERCE_API_KEY = process.env.ECOMMERCE_API_KEY || 'ecommerce-nestjs-to-gudang-express-secure-key';
 
 export const getDemandSignal = async (req: AuthenticatedRequest, res: Response) => {

@@ -131,29 +131,42 @@ export default function TrenTokoLanggananPage() {
               <div className="flex justify-center items-center h-full min-h-[200px]"><RefreshCw className="w-6 h-6 text-amber-500 animate-spin" /></div>
             ) : topProducts.length > 0 ? (
               <div className="space-y-4">
-                {topProducts.map((cat: any) => (
-                  <div key={cat.kategoriNama}>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{cat.kategoriNama}</h3>
+                {topProducts.map((cat: any) => {
+                  const kategoriNama = cat.kategoriNama || cat.kategori?.nama || "Kategori";
+                  const kategoriId = cat.kategori?.id || kategoriNama;
+                  const productsList = cat.produk || cat.topProduk || [];
+
+                  return (
+                  <div key={kategoriId}>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{kategoriNama}</h3>
                     <div className="space-y-2">
-                      {cat.produk?.map((p: any, idx: number) => (
-                        <div key={p.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                      {productsList.map((pWrapper: any, idx: number) => {
+                        const p = pWrapper.produk || pWrapper;
+                        const pId = p.id || idx;
+                        const tokoNama = pWrapper.toko?.nama || p.tokoNama || "Toko";
+                        const totalTerjual = pWrapper.jumlahTerjual || p.totalTerjual || 0;
+
+                        return (
+                        <div key={pId} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
                           <div className="flex items-center gap-3">
                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-100 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
                               {idx + 1}
                             </div>
                             <div>
                               <p className="font-semibold text-gray-800 text-sm">{p.nama}</p>
-                              <p className="text-xs text-gray-500">{p.tokoNama}</p>
+                              <p className="text-xs text-gray-500">{tokoNama}</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-gray-900 text-sm">{p.totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
+                            <p className="font-bold text-gray-900 text-sm">{totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-gray-400">

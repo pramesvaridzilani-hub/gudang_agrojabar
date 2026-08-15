@@ -18,7 +18,7 @@ import hargaPetaniRoutes from './routes/harga-petani.routes';
 import jadwalProduksiRoutes from './routes/jadwal-produksi.routes';
 import trendTokoRoutes from './routes/trend-toko.routes';
 import masterKomoditasRoutes from './routes/master-komoditas.routes';
-
+import uploadRoutes from './routes/upload.routes';
 const app = express();
 
 // Configure CORS to allow access from local/production web applications
@@ -53,6 +53,8 @@ app.use('/api/harga-petani', hargaPetaniRoutes);
 app.use('/api/jadwal-produksi', jadwalProduksiRoutes);
 app.use('/api/gudang', trendTokoRoutes);
 app.use('/api/master-komoditas', masterKomoditasRoutes);
+app.use('/api/upload', uploadRoutes);
+
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });

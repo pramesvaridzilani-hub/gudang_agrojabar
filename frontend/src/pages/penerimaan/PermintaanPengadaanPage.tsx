@@ -43,7 +43,10 @@ interface DemandSignalData {
 }
 
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers & Cache ───────────────────────────────────────────────────────────
+let globalCachedHargaPetani: any[] | null = null;
+let globalCachedProdukList: any[] | null = null;
+
 const fmtKg = (n: number) => `${n.toLocaleString('id-ID')} kg`;
 const fmtRp = (n: number) => n >= 1_000_000
   ? `Rp ${(n / 1_000_000).toFixed(1)}jt`
@@ -150,10 +153,16 @@ const FormBuatPermintaan: React.FC<FormBuatPermintaanProps> = ({ item, gudangId,
   useEffect(() => {
     const fetchHarga = async () => {
       try {
-        const res = await axios.get(`${API}/harga-petani`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const match = res.data.find((hp: any) => 
+        let hargaList = globalCachedHargaPetani;
+        if (!hargaList) {
+          const res = await axios.get(`${API}/harga-petani`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          hargaList = res.data || [];
+          globalCachedHargaPetani = hargaList;
+        }
+
+        const match = hargaList?.find((hp: any) => 
           hp.kodeKomoditasGlobal === item.kodeKomoditasGlobal || hp.namaPetani === item.komoditasNama
         );
         if (match && match.hargaPetani) {
@@ -395,6 +404,13 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
   useEffect(() => {
     const fetchData = async () => {
       try {
+        if (globalCachedProdukList && globalCachedHargaPetani) {
+          setProdukList(globalCachedProdukList);
+          setHargaPetaniList(globalCachedHargaPetani);
+          setLoadingProduk(false);
+          return;
+        }
+
         const [resProduk, resHarga] = await Promise.all([
           axios.get(`${API}/produk/staf`, {
             params: { gudangId },
@@ -404,8 +420,12 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
             headers: { Authorization: `Bearer ${token}` },
           })
         ]);
-        setProdukList(resProduk.data?.data || resProduk.data || []);
-        setHargaPetaniList(resHarga.data || []);
+        
+        globalCachedProdukList = resProduk.data?.data || resProduk.data || [];
+        globalCachedHargaPetani = resHarga.data || [];
+        
+        setProdukList(globalCachedProdukList || []);
+        setHargaPetaniList(globalCachedHargaPetani || []);
       } catch (err) {
         console.error('Gagal ambil data:', err);
       } finally {
@@ -436,12 +456,21 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
         if (item.hargaAcuanPerKg) return; // skip jika harga sudah ada
 
         const produk = produkList.find(p => p.nama.toLowerCase().includes(nama.toLowerCase()));
-        if (!produk) return;
-        const match = hargaPetaniList.find(hp =>
-          hp.masterKomoditasId === produk.masterKomoditasId ||
-          hp.kodeKomoditasGlobal === (produk.masterKomoditas?.kodeKomoditasGlobal || produk.kodeKomoditasGlobal) ||
-          hp.namaPetani === produk.nama
-        );
+        let match = null;
+        if (produk) {
+          match = hargaPetaniList.find(hp =>
+            hp.masterKomoditasId === produk.masterKomoditasId ||
+            hp.kodeKomoditasGlobal === (produk.masterKomoditas?.kodeKomoditasGlobal || produk.kodeKomoditasGlobal) ||
+            hp.namaPetani === produk.nama
+          );
+        }
+        if (!match) {
+          match = hargaPetaniList.find(hp => 
+            (hp.namaMaster && hp.namaMaster.toLowerCase().includes(nama.toLowerCase())) || 
+            (hp.namaPetani && hp.namaPetani.toLowerCase().includes(nama.toLowerCase()))
+          );
+        }
+        
         if (match && match.hargaPetani) {
           newItems[idx] = { ...newItems[idx], hargaAcuanPerKg: match.hargaPetani.toString() };
           changed = true;
@@ -459,16 +488,21 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
     if (field === 'komoditasNama') {
       const nama = value;
       const produk = produkList.find(p => p.nama.toLowerCase().includes(nama.toLowerCase()));
+      let match = null;
       if (produk) {
-        const match = hargaPetaniList.find(hp => 
+        match = hargaPetaniList.find(hp => 
           hp.masterKomoditasId === produk.masterKomoditasId || 
           hp.kodeKomoditasGlobal === (produk.masterKomoditas?.kodeKomoditasGlobal || produk.kodeKomoditasGlobal) || 
           hp.namaPetani === produk.nama
         );
-        item.hargaAcuanPerKg = (match && match.hargaPetani) ? match.hargaPetani.toString() : '';
-      } else {
-        item.hargaAcuanPerKg = '';
       }
+      if (!match) {
+        match = hargaPetaniList.find(hp => 
+          (hp.namaMaster && hp.namaMaster.toLowerCase().includes(nama.toLowerCase())) || 
+          (hp.namaPetani && hp.namaPetani.toLowerCase().includes(nama.toLowerCase()))
+        );
+      }
+      item.hargaAcuanPerKg = (match && match.hargaPetani) ? match.hargaPetani.toString() : '';
         
       // Recalculate order volume if targetProduksiKg exists
       if (item.targetProduksiKg && nama) {
@@ -624,9 +658,9 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
         e.preventDefault();
         
         // Validasi
-        const invalidItem = items.find(it => !it.komoditasNama || !it.targetProduksiKg);
+        const invalidItem = items.find(it => !it.komoditasNama || !it.targetProduksiKg || !it.hargaAcuanPerKg);
         if (invalidItem) {
-          setError('Mohon lengkapi komoditas dan target produksi untuk semua baris.');
+          setError('Mohon lengkapi komoditas, target produksi, dan pastikan harga muncul untuk semua baris.');
           return;
         }
 
@@ -683,20 +717,15 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
                       required
                     >
                       <option value="">-- Pilih Komoditas --</option>
-                      {item.komoditasNama && (
+                      {item.komoditasNama && !produkList.some(p => p.nama === item.komoditasNama) && !hargaPetaniList.some(hp => hp.namaMaster === item.komoditasNama || hp.namaPetani === item.komoditasNama) && !['Wortel', 'Jagung', 'Buncis'].includes(item.komoditasNama) && (
                         <option value={item.komoditasNama}>{item.komoditasNama}</option>
                       )}
-                      {produkList.map((p) => (
-                        p.nama !== item.komoditasNama && (
-                          <option key={p.id} value={p.nama}>
-                            {p.nama}
-                          </option>
-                        )
-                      ))}
-                      {['Wortel', 'Jagung', 'Buncis'].map(k => (
-                        k !== item.komoditasNama && !produkList.some(p => p.nama === k) && (
-                          <option key={k} value={k}>{k}</option>
-                        )
+                      {Array.from(new Set([
+                        ...produkList.map(p => p.nama),
+                        ...hargaPetaniList.map(hp => hp.namaMaster || hp.namaPetani),
+                        'Wortel', 'Jagung', 'Buncis'
+                      ])).filter(Boolean).map(k => (
+                        <option key={k} value={k}>{k}</option>
                       ))}
                     </select>
                   )}
@@ -887,7 +916,7 @@ const FormManualFromStok: React.FC<FormManualProps> = ({ gudangId, token, initia
         {/* Submit */}
         <button
           type="submit"
-          disabled={loading || items.length === 0}
+          disabled={loading || loadingProduk || items.length === 0 || items.some(it => !it.komoditasNama || !it.targetProduksiKg || !it.hargaAcuanPerKg)}
           className="w-full bg-emerald-600 text-white font-bold py-3.5 rounded-xl text-sm hover:bg-emerald-700 disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 transition-all mt-6"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -1494,29 +1523,65 @@ const PermintaanPengadaanPage: React.FC = () => {
                   <div className="p-4 flex-1">
                     {topProducts.length > 0 ? (
                       <div className="space-y-4">
-                        {topProducts.map((cat: any) => (
-                          <div key={cat.kategoriNama}>
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{cat.kategoriNama}</h3>
+                        {topProducts.map((cat: any) => {
+                          const kategoriNama = cat.kategoriNama || cat.kategori?.nama || "Kategori";
+                          const kategoriId = cat.kategori?.id || kategoriNama;
+                          const productsList = cat.produk || cat.topProduk || [];
+                          
+                          return (
+                          <div key={kategoriId}>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{kategoriNama}</h3>
                             <div className="space-y-2">
-                              {cat.produk?.map((p: any, idx: number) => (
-                                <div key={p.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
+                              {productsList.map((pWrapper: any, idx: number) => {
+                                const p = pWrapper.produk || pWrapper;
+                                const pId = p.id || idx;
+                                const tokoNama = pWrapper.toko?.nama || p.tokoNama || "Toko";
+                                const totalTerjual = pWrapper.jumlahTerjual || p.totalTerjual || 0;
+                                const kodeKomoditasGlobal = p.kodeKomoditasGlobal || null;
+                                
+                                return (
+                                <div key={pId} className="group flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-100">
                                   <div className="flex items-center gap-3">
                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-gray-100 text-gray-700' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
                                       {idx + 1}
                                     </div>
                                     <div>
                                       <p className="font-semibold text-gray-800 text-sm">{p.nama}</p>
-                                      <p className="text-xs text-gray-500">{p.tokoNama}</p>
+                                      <p className="text-xs text-gray-500">{tokoNama}</p>
                                     </div>
                                   </div>
-                                  <div className="text-right">
-                                    <p className="font-bold text-gray-900 text-sm">{p.totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
+                                  <div className="text-right flex items-center gap-3">
+                                    <div className="group-hover:hidden">
+                                      <p className="font-bold text-gray-900 text-sm">{totalTerjual} <span className="text-xs font-normal text-gray-500">terjual</span></p>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setFormItem({
+                                          komoditasNama: p.nama,
+                                          kodeKomoditasGlobal: kodeKomoditasGlobal,
+                                          masterProdukId: pId,
+                                          jumlahTerjualKg: p.totalTerjual || 0,
+                                          prevJumlahTerjualKg: 0,
+                                          totalRevenue: p.revenue || 0,
+                                          jumlahTransaksi: 0,
+                                          trendPersen: null,
+                                          trendArah: 'STABLE',
+                                          jumlahSeller: 1,
+                                        });
+                                      }}
+                                      className="hidden group-hover:flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                      title="Ajukan Pengadaan ke Petani"
+                                    >
+                                      <Plus size={12} /> Ajukan
+                                    </button>
                                   </div>
                                 </div>
-                              ))}
+                              );
+                              })}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-gray-400">

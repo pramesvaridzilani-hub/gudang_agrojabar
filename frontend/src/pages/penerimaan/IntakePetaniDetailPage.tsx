@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Loader2,
   Truck,
+  Upload,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
@@ -38,6 +39,7 @@ const IntakePetaniDetailPage: React.FC = () => {
   const [intake, setIntake] = useState<IntakePetani | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingBukti, setUploadingBukti] = useState(false);
 
   const fetchIntake = async () => {
     try {
@@ -93,6 +95,47 @@ const IntakePetaniDetailPage: React.FC = () => {
       console.error('Failed to ditimbang:', err);
     }
   };
+
+  const handleUploadBukti = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!intake || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+
+    try {
+      setUploadingBukti(true);
+      // 1. Upload ke bucket via Backend
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'intake/bukti-pembayaran');
+
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const publicUrl = uploadRes.data.data.url;
+
+      // 2. Simpan URL ke database
+      await api.post(`/penerimaan/${intake.id}/upload-bukti`, {
+        buktiPembayaranUrl: publicUrl,
+      });
+
+      // Update state
+      setIntake((prev) =>
+        prev
+          ? {
+              ...prev,
+              intakeStatus: 'selesai',
+              buktiPembayaranUrl: publicUrl,
+              uploadBuktiAt: new Date().toISOString(),
+            }
+          : null
+      );
+    } catch (err: any) {
+      console.error('Failed to upload bukti:', err);
+      alert(err.response?.data?.message || 'Gagal mengunggah bukti pembayaran');
+    } finally {
+      setUploadingBukti(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -364,6 +407,29 @@ const IntakePetaniDetailPage: React.FC = () => {
                 <Scale className="w-4 h-4" />
                 Catat Penimbangan
               </button>
+            )}
+            {intake.intakeStatus === 'ditimbang' && !intake.buktiPembayaranUrl && (
+              <div>
+                <input
+                  type="file"
+                  id="upload-bukti"
+                  className="hidden"
+                  accept="image/*,.pdf"
+                  onChange={handleUploadBukti}
+                  disabled={uploadingBukti}
+                />
+                <label
+                  htmlFor="upload-bukti"
+                  className={`w-full px-4 py-2.5 ${uploadingBukti ? 'bg-slate-400' : 'bg-green-600 hover:bg-green-700'} text-white font-medium text-sm rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer`}
+                >
+                  {uploadingBukti ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {uploadingBukti ? 'Mengunggah...' : 'Upload Bukti Pembayaran'}
+                </label>
+              </div>
             )}
             {isCompleted && (
               <div className="flex items-center gap-2 justify-center text-green-600 font-medium text-sm">

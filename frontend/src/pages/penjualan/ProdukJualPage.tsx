@@ -19,6 +19,7 @@ import {
   Edit2,
   AlertCircle,
   Store,
+  Upload,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -250,8 +251,11 @@ const ModalEdit: React.FC<ModalEditProps> = ({ produk, onSuccess, onClose }) => 
   const [harga, setHarga] = useState(produk.hargaGudang.toString());
   const [minBeli, setMinBeli] = useState((produk.minimalPembelianKg ?? 300).toString());
   const [varian, setVarian] = useState(produk.varianProduk || '');
+  const [gambarUrl, setGambarUrl] = useState(produk.gambarUrl || '');
   const [varianOptions, setVarianOptions] = useState<{ id: string; nama: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingGambar, setUploadingGambar] = useState(false);
+  const [gambarFile, setGambarFile] = useState<File | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -268,17 +272,49 @@ const ModalEdit: React.FC<ModalEditProps> = ({ produk, onSuccess, onClose }) => 
     setSubmitting(true);
     setError('');
     try {
+      let finalUrl = gambarUrl;
+      // Upload gambar jika ada file yang dipilih baru
+      if (gambarFile) {
+        setUploadingGambar(true);
+        const fd = new FormData();
+        fd.append('file', gambarFile);
+        fd.append('folder', 'produk/gudang');
+        
+        const token = localStorage.getItem('gudang_token');
+        const uploadRes = await fetch(`${api.defaults.baseURL}/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: fd
+        });
+        
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(`Upload gagal: ${uploadData.message || uploadData.error || 'Terjadi kesalahan'}`);
+        }
+        finalUrl = uploadData.data.url;
+      }
+
       await api.patch(`/produk/admin/${produk.id}`, {
         stok: parseFloat(stok),
         hargaGudang: parseFloat(harga),
         minimalPembelianKg: parseFloat(minBeli) || 300,
         varianProduk: varian.trim() || null,
+        gambarUrl: finalUrl.trim() || null,
       });
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Gagal memperbarui');
     } finally {
       setSubmitting(false);
+      setUploadingGambar(false);
+    }
+  };
+
+  const handlePilihGambar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setGambarFile(e.target.files[0]);
     }
   };
 
@@ -365,6 +401,24 @@ const ModalEdit: React.FC<ModalEditProps> = ({ produk, onSuccess, onClose }) => 
             <p className="text-[10px] text-slate-400 mt-1">Seller wajib mengajukan minimal sebanyak ini per produk.</p>
           </div>
 
+          {/* Gambar Opsional Khusus Gudang */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Gambar Produk <span className="font-normal text-slate-400">(opsional)</span></label>
+            <div className="flex gap-2">
+              <input type="file" id="edit-gambar" className="hidden" accept="image/*" onChange={handlePilihGambar} disabled={uploadingGambar || submitting} />
+              <label htmlFor="edit-gambar" className={`flex items-center gap-1.5 px-3 py-2 ${(uploadingGambar || submitting) ? 'bg-slate-300' : 'bg-slate-100 hover:bg-slate-200'} border border-slate-200 rounded-lg text-xs cursor-pointer text-slate-700 font-medium`}>
+                {uploadingGambar ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Pilih File
+              </label>
+              <input type="url" value={gambarUrl} onChange={e => { setGambarUrl(e.target.value); setGambarFile(null); }} placeholder="Atau URL Gambar..." className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+            </div>
+            {gambarFile ? (
+              <p className="text-xs text-emerald-600 mt-2 font-medium">✅ File siap diupload: {gambarFile.name}</p>
+            ) : gambarUrl ? (
+              <img src={gambarUrl} alt="Preview" className="mt-2 h-16 w-16 object-cover rounded-md border border-slate-200" />
+            ) : null}
+          </div>
+
           {error && (
             <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
               <AlertCircle size={14} /> {error}
@@ -404,6 +458,9 @@ const KatalogPickerForm: React.FC<KatalogPickerFormProps> = ({ komoditasList, pr
   const [varianOptions, setVarianOptions] = useState<{ id: string; nama: string }[]>([]);
   const [harga, setHarga] = useState('');
   const [minBeli, setMinBeli] = useState('300');
+  const [gambarUrl, setGambarUrl] = useState('');
+  const [uploadingGambar, setUploadingGambar] = useState(false);
+  const [gambarFile, setGambarFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -426,12 +483,16 @@ const KatalogPickerForm: React.FC<KatalogPickerFormProps> = ({ komoditasList, pr
 
   const selectedKomoditas = komoditasList.find((k) => k.id === selectedKomoditasId);
 
-  // When komoditas changes, set default harga
+  // When komoditas changes, set default harga and image
   useEffect(() => {
     if (selectedKomoditas) {
       setHarga(selectedKomoditas.harga.toString());
+      setGambarUrl(selectedKomoditas.gambarUrl || '');
+    } else {
+      setHarga('');
+      setGambarUrl('');
     }
-  }, [selectedKomoditasId]);
+  }, [selectedKomoditasId, selectedKomoditas]);
 
   // Check if this exact komoditas+varian combo already exists
   const isDuplicate = selectedKomoditasId && produkList.some(
@@ -447,6 +508,30 @@ const KatalogPickerForm: React.FC<KatalogPickerFormProps> = ({ komoditasList, pr
     setSubmitting(true);
     setError('');
     try {
+      let finalUrl = gambarUrl;
+      // Upload gambar jika ada file yang dipilih baru
+      if (gambarFile) {
+        setUploadingGambar(true);
+        const fd = new FormData();
+        fd.append('file', gambarFile);
+        fd.append('folder', 'produk/gudang');
+        
+        const token = localStorage.getItem('gudang_token');
+        const uploadRes = await fetch(`${api.defaults.baseURL}/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: fd
+        });
+        
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) {
+          throw new Error(`Upload gagal: ${uploadData.message || uploadData.error || 'Terjadi kesalahan'}`);
+        }
+        finalUrl = uploadData.data.url;
+      }
+
       await api.post('/produk/admin', {
         gudangId,
         masterKomoditasId: selectedKomoditasId,
@@ -454,12 +539,20 @@ const KatalogPickerForm: React.FC<KatalogPickerFormProps> = ({ komoditasList, pr
         hargaGudang: parseFloat(harga),
         minimalPembelianKg: parseFloat(minBeli) || 300,
         varianProduk: varian.trim() || undefined,
+        gambarUrl: finalUrl.trim() || undefined,
       });
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Gagal menambahkan produk');
     } finally {
       setSubmitting(false);
+      setUploadingGambar(false);
+    }
+  };
+
+  const handlePilihGambar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setGambarFile(e.target.files[0]);
     }
   };
 
@@ -552,6 +645,24 @@ const KatalogPickerForm: React.FC<KatalogPickerFormProps> = ({ komoditasList, pr
               onChange={(e) => setMinBeli(e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
+          </div>
+
+          {/* Gambar Produk */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Gambar Produk <span className="font-normal text-slate-400">(opsional)</span></label>
+            <div className="flex gap-2">
+              <input type="file" id="tambah-gambar" className="hidden" accept="image/*" onChange={handlePilihGambar} disabled={uploadingGambar || submitting} />
+              <label htmlFor="tambah-gambar" className={`flex items-center gap-1.5 px-3 py-2 ${(uploadingGambar || submitting) ? 'bg-slate-300' : 'bg-slate-100 hover:bg-slate-200'} border border-slate-200 rounded-lg text-xs cursor-pointer text-slate-700 font-medium`}>
+                {uploadingGambar ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Pilih File
+              </label>
+              <input type="url" value={gambarUrl} onChange={e => { setGambarUrl(e.target.value); setGambarFile(null); }} placeholder="Atau URL Gambar..." className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+            </div>
+            {gambarFile ? (
+              <p className="text-xs text-emerald-600 mt-2 font-medium">✅ File siap diupload: {gambarFile.name}</p>
+            ) : gambarUrl ? (
+              <img src={gambarUrl} alt="Preview" className="mt-2 h-16 w-16 object-cover rounded-md border border-slate-200" />
+            ) : null}
           </div>
 
           {error && (
@@ -697,22 +808,33 @@ const ProdukJualPage: React.FC = () => {
             {filteredProduk.map((p) => (
               <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-5 py-3.5">
-                  <p className="font-semibold text-slate-800">
-                    {p.nama}
-                    {p.varianProduk && (
-                      <span className="ml-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
-                        {p.varianProduk}
-                      </span>
+                  <div className="flex items-center gap-3">
+                    {p.gambarUrl ? (
+                      <img src={p.gambarUrl} alt={p.nama} className="w-10 h-10 rounded-md object-cover border border-slate-200" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-md bg-slate-100 flex items-center justify-center border border-slate-200">
+                        <Store className="w-5 h-5 text-slate-400" />
+                      </div>
                     )}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-[10px] text-slate-400">{p.satuan}</p>
-                    {p.masterKomoditas?.kategori && (
-                      <p className="text-[10px] text-slate-400 capitalize">· {p.masterKomoditas.kategori}</p>
-                    )}
-                    {p.masterKomoditas?.kodeKomoditasGlobal && (
-                      <p className="text-[10px] font-mono text-emerald-600">· {p.masterKomoditas.kodeKomoditasGlobal}</p>
-                    )}
+                    <div>
+                      <p className="font-semibold text-slate-800">
+                        {p.nama}
+                        {p.varianProduk && (
+                          <span className="ml-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                            {p.varianProduk}
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-[10px] text-slate-400">{p.satuan}</p>
+                        {p.masterKomoditas?.kategori && (
+                          <p className="text-[10px] text-slate-400 capitalize">· {p.masterKomoditas.kategori}</p>
+                        )}
+                        {p.masterKomoditas?.kodeKomoditasGlobal && (
+                          <p className="text-[10px] font-mono text-emerald-600">· {p.masterKomoditas.kodeKomoditasGlobal}</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5 text-right font-medium text-slate-700">
