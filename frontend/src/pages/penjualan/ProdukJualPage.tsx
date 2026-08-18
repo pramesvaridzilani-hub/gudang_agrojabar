@@ -46,6 +46,7 @@ interface ProdukGudang {
   stok: number;
   minimalPembelianKg?: number;
   deskripsi?: string;
+  gambarUrl?: string;
   isActive: boolean;
   masterKomoditasId?: string;
   masterKomoditas?: {
