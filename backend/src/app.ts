@@ -24,7 +24,8 @@ const app = express();
 // Configure CORS to allow access from local/production web applications
 app.use(
   cors({
-    origin: '*',
+    origin: true,
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key', 'x-api-key'],
   })
